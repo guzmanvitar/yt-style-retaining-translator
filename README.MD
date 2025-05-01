@@ -21,7 +21,7 @@ This project translates YouTube videos into a different language while retaining
 ## 🔧 Setup & Installation
 1️⃣ Clone the Repository
 ```bash
-git clone https://github.com/guzmanvitar/speak-as-tolkien-tts
+git clone https://github.com/guzmanvitar/yt-style-retaining-translator
 cd yt-style-retaining-translator
 ```
 

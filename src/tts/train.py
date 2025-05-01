@@ -5,8 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-SCRIPT_PATH = Path("src/tts/trainers/train_vits_tolkien.py")
-CONFIG_PATH = Path("src/tts/configs/vits-tolkien-config.json")
+SCRIPT_PATH = Path("src/tts/trainers/train_vits.py")
+CONFIG_PATH = Path("src/tts/configs/vits-config.json")
 
 
 def train_model():
