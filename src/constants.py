@@ -17,7 +17,7 @@ MODEL_OUTPUT_PATH = ROOT / "models"
 SECRETS = ROOT / ".secrets"
 
 DATA = ROOT / "data"
-DATA_RECORDINGS = DATA / "recordings"
+DATA_RAW = DATA / "raw"
 DATA_PROCESSED = DATA / "processed"
 
 TESTS_DIR = ROOT / "tests"
@@ -26,5 +26,5 @@ DATA_COQUI = DATA / "coqui"
 
 
 LOGS.mkdir(exist_ok=True, parents=True)
-DATA_RECORDINGS.mkdir(exist_ok=True, parents=True)
+DATA_RAW.mkdir(exist_ok=True, parents=True)
 DATA_PROCESSED.mkdir(exist_ok=True, parents=True)
