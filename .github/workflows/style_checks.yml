@@ -1,0 +1,36 @@
+name: Style check
+
+on: push
+
+jobs:
+  style-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup UV
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          uv python install 3.10.13
+
+      # Allow loading cached dependencies if they exist
+      - name: Load cached dependencies if they exist
+        id: deps-cache
+        uses: actions/cache@v3
+        with:
+          path: .uv
+          key: deps-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
+
+      - name: Sync dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        run: uv sync
+
+      - name: Check format with black
+        run: uv run black --check --exclude "\.venv|data|\.vscode|\.github" .
+
+      - name: Check style with flake8
+        run: uv run flake8 --exclude .venv,data,.vscode,.github .
+
+      - name: Check import sorting with isort
+        run: uv run isort --check --skip .venv --skip data --skip .vscode --skip .github .

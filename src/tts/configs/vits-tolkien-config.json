@@ -1,0 +1,39 @@
+{
+  "output_path": "models/training_output",
+  "run_name": "vits_tolkien",
+  "phoneme_cache_path": "models/phoneme_cache",
+  "epochs": 1500,
+  "batch_size": 4,
+  "eval_batch_size": 2,
+  "save_step": 10,
+  "save_n_checkpoints": 1,
+  "save_all_best": false,
+  "save_best_after": 0,
+  "log_model_step": 1,
+  "print_step": 10,
+  "num_loader_workers": 0,
+  "num_eval_loader_workers": 0,
+  "start_by_longest": true,
+  "lr_gen": 0.00005,
+  "lr_disc": 0.00005,
+  "model_args": {
+    "init_discriminator": true,
+    "use_spectral_norm_disriminator": false,
+    "freeze_encoder": true,
+    "freeze_DP": true,
+    "freeze_PE": true
+  },
+  "test_sentences": [
+    "The road goes ever on and on, down from the door where it began."
+  ],
+  "datasets": [
+    {
+      "dataset_name": "tolkien_interview",
+      "formatter": "ljspeech",
+      "path": "data/coqui",
+      "meta_file_train": "metadata.csv",
+      "meta_file_val": "metadata.csv",
+      "language": "en"
+    }
+  ]
+}
