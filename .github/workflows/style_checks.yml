@@ -32,5 +32,8 @@ jobs:
       - name: Check style with flake8
         run: uv run flake8 --exclude .venv,data,.vscode,.github .
 
+      - name: Show diff on failure
+        if: failure()
+        run: uv run isort --diff .
       - name: Check import sorting with isort
         run: uv run isort --check --skip .venv --skip data --skip .vscode --skip .github .
