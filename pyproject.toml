@@ -13,6 +13,7 @@ dependencies = [
     "torch==2.2.2",
     "torchaudio>=2.2.2",
     "webrtcvad>=2.0.10",
+    "yt-dlp>=2025.4.30",
 ]
 
 [dependency-groups]
