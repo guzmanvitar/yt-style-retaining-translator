@@ -1,4 +1,4 @@
-"""Train a VITS model using a Tolkien-style dataset and the Coqui Trainer with speaker adaptation"""
+"""Train a VITS model using a custom dataset and the Coqui Trainer with speaker adaptation"""
 
 import json
 from pathlib import Path
@@ -58,7 +58,7 @@ def main() -> None:
     initialize model and tokenizer using a pretrained VITS base,
     prepare the dataset, and fine-tune using the Coqui Trainer.
     """
-    local_config_path = Path("src/tts/configs/vits-tolkien-config.json").resolve()
+    local_config_path = Path("src/tts/configs/vits-config.json").resolve()
     pretrained_dir = Path(
         "/Users/guzman.vitar/Library/Application Support/tts/tts_models--en--vctk--vits"
     ).expanduser()

@@ -12,7 +12,7 @@ def convert_audio():
     """
     Convert a stereo 48kHz WAV file to mono 22.05kHz WAV.
 
-    This function reads the original Tolkien interview audio file from the
+    This function reads the original audio file from the
     `DATA_RECORDINGS` directory, downmixes it to mono, resamples it to 22050 Hz,
     and exports the result to a new file in the `DATA_PROCESSED` directory.
 

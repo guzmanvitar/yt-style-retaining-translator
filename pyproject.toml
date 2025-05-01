@@ -1,5 +1,5 @@
 [project]
-name = "speak-as-tolkien-tts"
+name = "yt-style-retaining-translator"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -27,3 +27,12 @@ dev = [
     "pydantic>=2.11.2",
     "pytest>=8.3.5",
 ]
+
+[tool.isort]
+profile = "black"
+skip = [".venv", "data", ".vscode", ".github"]
+line_length = 100
+
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503"]
