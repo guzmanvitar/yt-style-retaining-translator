@@ -33,7 +33,7 @@ jobs:
         run: uv run flake8 --exclude .venv,data,.vscode,.github .
 
       - name: Check import sorting with isort
-        run: uv run isort --profile black --skip .venv --skip data --skip .vscode --skip .github .
+        run: uv run isort --settings pyproject.toml --skip .venv --skip data --skip .vscode --skip .github .
 
       - name: Show diff on failure
         if: failure()
