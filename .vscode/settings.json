@@ -3,7 +3,9 @@
     // Set correct python path to venv's one
     //
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
-    "python.analysis.extraPaths": ["./src"],
+    "python.analysis.extraPaths": [
+        "./src"
+    ],
     //
     // Very optional: type checking. Remove the line if your project doesn't really use or respect
     // type hints.
@@ -31,7 +33,7 @@
     "python.linting.enabled": true,
     "python.linting.pylintEnabled": false,
     "python.linting.flake8Enabled": true,
-    "python.formatting.provider": "black",
+    "python.formatting.provider": "none",
     "prettier.tabWidth": 2,
     "files.trimFinalNewlines": true,
     "files.trimTrailingWhitespace": true,
@@ -50,4 +52,7 @@
         "--ignore=E501,W503,W504,E203",
         "--max-complexity=10",
     ],
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+    },
 }
