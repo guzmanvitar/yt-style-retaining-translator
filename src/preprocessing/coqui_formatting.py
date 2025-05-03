@@ -57,7 +57,9 @@ def merge_coqui_csvs_and_audio(
 
 def main() -> None:
     """Run Coqui dataset preparation by merging all segmented CSVs in a directory."""
-    parser = argparse.ArgumentParser(description="Prepare full dataset for Coqui TTS training.")
+    parser = argparse.ArgumentParser(
+        description="Prepare full dataset for Coqui TTS training."
+    )
     parser.add_argument(
         "--segments-dir",
         type=Path,
