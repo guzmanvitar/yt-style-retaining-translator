@@ -48,12 +48,12 @@ Clone the Coqui repos to a folder outside your project (e.g. `~/support_repos`):
 mkdir -p ~/support_repos
 cd ~/support_repos
 
-git clone https://github.com/coqui-ai/TTS.git
+git clone https://github.com/idiap/coqui-ai-TTS.git
 git clone https://github.com/coqui-ai/Trainer.git
 ```
 
 Install both in editable mode (with no dependencies) using uv pip:
 ```bash
-uv pip install -e ~/support_repos/TTS
+uv pip install -e ~/support_repos/coqui-ai-TTS
 uv pip install -e ~/support_repos/Trainer
 ```
