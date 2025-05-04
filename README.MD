@@ -37,23 +37,21 @@ To set up Git hooks for code quality checks run also
 uv run pre-commit install
 ```
 
-3️⃣ Install Coqui TTS and Trainer (Development Version)
-This project relies on the latest features and training scripts from the Coqui [TTS](https://github.com/coqui-ai/TTS) and [Trainer](https://github.com/coqui-ai/Trainer) repositories.
+3️⃣ Install Coqui TTS (Development Version)
+This project relies on the latest features from the [Coqui TTS fork](https://github.com/idiap/coqui-ai-TTS.git) repositories.
 
-These are installed directly from source because the version available on PyPI is intended for inference only.
+This repo is installed directly from source because the version available on PyPI is intended for inference only.
 Training requires the full source code, which is actively developed in the GitHub repositories.
 
-Clone the Coqui repos to a folder outside your project (e.g. `~/support_repos`):
+Clone the Coqui repo to a folder outside your project (e.g. `~/support_repos`):
 ```bash
 mkdir -p ~/support_repos
 cd ~/support_repos
 
 git clone https://github.com/idiap/coqui-ai-TTS.git
-git clone https://github.com/coqui-ai/Trainer.git
 ```
 
-Install both in editable mode (with no dependencies) using uv pip:
+Install in editable mode (with no dependencies) using uv pip:
 ```bash
 uv pip install -e ~/support_repos/coqui-ai-TTS
-uv pip install -e ~/support_repos/Trainer
 ```
