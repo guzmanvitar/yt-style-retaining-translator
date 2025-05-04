@@ -1,0 +1,59 @@
+{
+    "base_args": {
+        "formatter": "ljspeech",
+        "dataset_name": "youtube_audio",
+        "path": "data/coqui/",
+        "meta_file_train": "metadata.csv",
+        "language": "en"
+    },
+    "gpt_args": {
+        "max_conditioning_length": 132300,
+        "min_conditioning_length": 66150,
+        "debug_loading_failures": false,
+        "max_wav_length": 255995,
+        "max_text_length": 200,
+        "gpt_num_audio_tokens": 1026,
+        "gpt_start_audio_token": 1024,
+        "gpt_stop_audio_token": 1025,
+        "gpt_use_masking_gt_prompt_approach": true,
+        "gpt_use_perceiver_resampler": true
+    },
+    "audio_args": {
+        "sample_rate": 22050,
+        "dvae_sample_rate": 22050,
+        "output_sample_rate": 24000
+    },
+    "gpt_trainer_args": {
+        "run_name": "xtts_youtube",
+        "project_name": "XTTS_trainer",
+        "dashboard_logger": "tensorboard",
+        "optimizer_wd_only_on_weights": true,
+        "batch_size": 3,
+        "eval_batch_size": 3,
+        "run_description": "GPT XTTS training",
+        "batch_group_size": 48,
+        "num_loader_workers": 0,
+        "num_eval_loader_workers": 0,
+        "eval_split_max_size": 256,
+        "print_step": 1,
+        "plot_step": 100,
+        "log_model_step": 5,
+        "save_step": 10,
+        "save_n_checkpoints": 1,
+        "save_checkpoints": true,
+        "optimizer_params": {
+            "betas": [
+                0.9,
+                0.96
+            ],
+            "eps": 1e-8,
+            "weight_decay": 1e-2
+        },
+        "lr": 5e-06,
+        "lr_scheduler": "MultiStepLR"
+    },
+    "trainer_args": {
+        "start_with_eval": true,
+        "grad_accum_steps": 84
+    }
+}
