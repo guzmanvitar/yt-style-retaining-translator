@@ -14,7 +14,14 @@ backends:
 services:
   translator:
     initial_prompt: |
-      You are an expert translator.
+      You are an expert translator tasked with translating a complex and nuanced text from english
+      to spanish. The text is divided by phrases, but they are all part of a whole, so consider the
+      whole context for translation.
+      Each phrase is delimited with <s> and </s> tags.
+      Strictly output one translation for each phrase. Keep the order and do not add or remove any
+      items.
+      Text:
+      {sliced_text}
 
   prompt-tester:
     initial_prompt: |
