@@ -24,25 +24,22 @@ def chunk_aligned_audio_versions(
     min_silence_len: int = 2000,
     silence_thresh: int = -40,
     keep_silence: int = 1000,
-) -> list[list[Path]]:
+) -> tuple[list[list[Path]], list[float]]:
     """
     Split multiple aligned audio versions using silence detection from one reference version.
 
     Args:
         audio_paths (List[Path]): Paths to aligned input audio files (e.g., 16k, 22k versions).
         reference_index (int): Index of the audio file to use for silence detection.
-        output_dirs (List[Path]): Output directories for each audio version (must match length of
-            audio_paths).
+        output_dirs (List[Path]): Output directories for each audio version.
         base_filename (str): Stem for naming chunk files.
         target_chunk_duration_ms (int): Approx. max length per chunk.
         min_silence_len (int): Minimum silence to detect (ms).
         silence_thresh (int): Silence threshold (dBFS).
         keep_silence (int): Milliseconds of silence to preserve at each split point.
 
-
     Returns:
-        List[List[Path]]: One list per chunk, each containing the paths of chunked audio across
-            versions.
+        Tuple[List[List[Path]], List[float]]: List of chunk path groups, and start times in seconds.
     """
     if len(audio_paths) != len(output_dirs):
         raise ValueError("audio_paths and output_dirs must have the same length")
@@ -54,6 +51,7 @@ def chunk_aligned_audio_versions(
     start = 0
     chunk_index = 0
     chunk_groups = []
+    chunk_start_times = []
 
     for d in output_dirs:
         d.mkdir(parents=True, exist_ok=True)
@@ -86,16 +84,17 @@ def chunk_aligned_audio_versions(
             chunk_paths.append(chunk_path)
 
         chunk_groups.append(chunk_paths)
+        chunk_start_times.append(start / 1000)  # convert to seconds
         chunk_index += 1
         start = cut_point
 
-    return chunk_groups
+    return chunk_groups, chunk_start_times
 
 
 def transcribe_and_align(
     audio_path: Path, model_size: str = "large-v3"
 ) -> list[dict[str, Any]]:
-    """
+    """`
     Transcribe and align a WAV audio file using WhisperX.
 
     Args:
@@ -125,7 +124,11 @@ def transcribe_and_align(
 
 
 def segment_audio(
-    audio_path: Path, segments: list[dict[str, Any]], chunks_dir: Path, csv_path: Path
+    audio_path: Path,
+    segments: list[dict[str, Any]],
+    chunks_dir: Path,
+    csv_path: Path,
+    global_offset: float = 0.0,
 ) -> None:
     """
     Slice audio into segments and save them as individual WAV files with metadata.
@@ -135,12 +138,16 @@ def segment_audio(
         segments (list): List of aligned segments with timestamps and text.
         chunks_dir (Path): Directory to store audio chunks.
         csv_path (Path): Path to write the CSV metadata.
+        global_offset (float): Offset in seconds to apply to all timestamps.
     """
     audio = AudioSegment.from_wav(audio_path)
     chunks_dir.mkdir(parents=True, exist_ok=True)
 
     rows = []
     for i, segment in enumerate(segments):
+        start_sec = segment["start"] + global_offset
+        end_sec = segment["end"] + global_offset
+
         start_ms = int(segment["start"] * 1000)
         end_ms = int(segment["end"] * 1000)
 
@@ -153,14 +160,14 @@ def segment_audio(
         logger.info(
             "Saved chunk: %s (%.2fs → %.2fs)",
             filename,
-            segment["start"],
-            segment["end"],
+            start_sec,
+            end_sec,
         )
         rows.append(
             {
                 "filename": filename,
-                "start": segment["start"],
-                "end": segment["end"],
+                "start": start_sec,
+                "end": end_sec,
                 "text": segment["text"].strip(),
             }
         )
@@ -210,7 +217,7 @@ def main() -> None:
             continue
 
         try:
-            chunk_groups = chunk_aligned_audio_versions(
+            chunk_groups, chunk_start_times = chunk_aligned_audio_versions(
                 audio_paths=[audio_path, segment_path],
                 reference_index=1,
                 output_dirs=[temp_16k, temp_22k],
@@ -219,13 +226,21 @@ def main() -> None:
             total_chunks = len(chunk_groups)
             logger.info("Created %d aligned chunk(s) for %s", total_chunks, base_name)
 
-            for idx, (chunk_16k, chunk_22k) in enumerate(chunk_groups, start=1):
+            for idx, ((chunk_16k, chunk_22k), offset) in enumerate(
+                zip(chunk_groups, chunk_start_times), start=1
+            ):
                 logger.info(
                     "Processing chunk %d/%d: %s", idx, total_chunks, chunk_16k.name
                 )
                 segments = transcribe_and_align(chunk_16k, model_size=args.model)
                 csv_path = args.output_dir / f"{chunk_22k.stem}_segments.csv"
-                segment_audio(chunk_22k, segments, args.output_dir / "chunks", csv_path)
+                segment_audio(
+                    chunk_22k,
+                    segments,
+                    args.output_dir / "chunks",
+                    csv_path,
+                    global_offset=offset,
+                )
 
         except (KeyError, OSError, RuntimeError) as e:
             logger.error("Segmentation failed for %s: %s", audio_path.name, e)
