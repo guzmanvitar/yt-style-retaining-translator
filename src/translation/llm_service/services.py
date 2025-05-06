@@ -9,11 +9,9 @@ import os
 import pathlib
 from abc import ABC, abstractmethod
 
-import torch
 import yaml
 from langchain_community.embeddings import OpenAIEmbeddings
 from openai import OpenAI
-from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from src.constants import LLM_SERVICE_CONFIG, SECRETS
 
