@@ -21,6 +21,7 @@ SECRETS = ROOT / ".secrets"
 DATA = ROOT / "data"
 DATA_RAW = DATA / "raw"
 DATA_PROCESSED = DATA / "processed"
+DATA_INFERENCE = DATA / "inference"
 
 TESTS_DIR = ROOT / "tests"
 
