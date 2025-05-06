@@ -4,6 +4,7 @@ import argparse
 import csv
 from pathlib import Path
 from shutil import copy2
+from pydub import AudioSegment
 
 from src.constants import DATA_COQUI, DATA_PROCESSED
 from src.logger_definition import get_logger
@@ -15,15 +16,19 @@ def merge_coqui_csvs_and_audio(
     segments_dir: Path,
     chunks_dir: Path,
     output_dir: Path,
+    min_duration_ms: int = 1000,
+    max_duration_ms: int = 11000,
 ) -> None:
     """
     Merge multiple segmented CSV files and copy their corresponding audio files
-    into a Coqui-compatible training dataset.
+    into a Coqui-compatible training dataset, filtering by audio duration.
 
     Args:
         segments_dir (Path): Directory containing multiple CSVs with segment data.
         chunks_dir (Path): Directory containing all the audio chunk .wav files.
         output_dir (Path): Output directory where `wavs/` and `metadata.csv` will be written.
+        min_duration_ms (int): Minimum segment duration to include.
+        max_duration_ms (int): Maximum segment duration to include.
     """
     logger.info("Preparing Coqui dataset from directory: %s", segments_dir)
     output_wav_dir = output_dir / "wavs"
@@ -46,6 +51,13 @@ def merge_coqui_csvs_and_audio(
 
                     if not source_file.exists():
                         logger.warning("Missing file: %s", source_file)
+                        continue
+
+                    duration_ms = len(AudioSegment.from_file(source_file))
+                    if duration_ms < min_duration_ms or duration_ms > max_duration_ms:
+                        logger.debug(
+                            "Skipping %s (duration: %d ms)", filename, duration_ms
+                        )
                         continue
 
                     copy2(source_file, target_file)

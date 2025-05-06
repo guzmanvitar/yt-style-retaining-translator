@@ -62,7 +62,7 @@ def prepare_xtts_v2_checkpoints(output_path: Path) -> Tuple[str, str, str, str]:
 
 
 # speaker reference to be used in training test sentences
-SPEAKER_REFERENCE = ["data/coqui/wavs/54l8_ewcOlY_chunk_000_segment_001.wav"]
+SPEAKER_REFERENCE = ["data/coqui/wavs/54l8_ewcOlY_chunk_000_segment_004.wav"]
 
 
 def main():

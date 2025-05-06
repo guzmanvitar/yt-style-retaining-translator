@@ -143,9 +143,6 @@ def segment_audio(
     for i, segment in enumerate(segments):
         start_ms = int(segment["start"] * 1000)
         end_ms = int(segment["end"] * 1000)
-        segment_duration = end_ms - start_ms
-        if segment_duration < 1000 or segment_duration > 11000:
-            continue  # Skip very short or very segments
 
         filename = f"{audio_path.stem}_segment_{i:03}.wav"
         chunk_path = chunks_dir / filename
