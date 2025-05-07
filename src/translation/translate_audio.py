@@ -2,9 +2,9 @@
 TTS Inference and Audio Assembly Pipeline.
 
 This script performs text-to-speech (TTS) inference using a translated transcription CSV,
-generates audio for each segment using an XTTS model, and stitches all segments together
-with silence alignment. Segments are not stretched or compressed unless they would overlap
-the next one, in which case they are gently sped up.
+generates audio for each segment using an XTTS model, aligns each generated clip using
+WhisperX to trim trailing artifacts, and stitches all segments together with silence
+alignment. Segments are only compressed if they would overlap the next.
 """
 
 from pathlib import Path
@@ -12,12 +12,65 @@ from typing import List, Tuple
 import pandas as pd
 from pydub import AudioSegment
 import click
+import torch
+import whisperx
 
 from src.tts.xtts_inference import run_inference
 from src.constants import DATA_INFERENCE
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
+
+
+def align_last_word_timestamp(
+    audio_path: Path,
+    text: str,
+    language: str = "es",
+    alignment_padding: float = 0.5,
+    trim_padding: float = 0.15,
+) -> float | None:
+    """
+    Align known text to audio using WhisperX and return a padded end time for trimming.
+
+    Args:
+        audio_path (Path): Path to WAV file.
+        text (str): Transcript to align.
+        language (str): Language code (e.g., 'es').
+        alignment_padding (float): Extra time (seconds) added to alignment window.
+        trim_padding (float): Extra time (seconds) added after last word for trimming.
+
+    Returns:
+        float | None: Safe end time (in seconds) to trim the TTS audio.
+    """
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    audio = AudioSegment.from_wav(audio_path)
+    audio_duration = len(audio) / 1000
+    padded_alignment_end = audio_duration + alignment_padding
+
+    fake_transcript = {
+        "language": language,
+        "segments": [{"start": 0.0, "end": padded_alignment_end, "text": text}],
+    }
+
+    model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
+    aligned_result = whisperx.align(
+        fake_transcript["segments"],
+        model_a,
+        metadata,
+        str(audio_path),
+        device,
+    )
+
+    words = aligned_result.get("word_segments", [])
+    if not words:
+        logger.warning(f"No words aligned in {audio_path.name}")
+        return None
+
+    last_word_end = words[-1]["end"]
+    safe_trim_end = min(last_word_end + trim_padding, audio_duration)
+
+    return safe_trim_end
 
 
 def run_segment_inference(
@@ -28,14 +81,14 @@ def run_segment_inference(
     language: str = "es",
 ) -> List[Tuple[float, float, float, Path]]:
     """
-    Run TTS inference on each translated segment.
+    Run TTS inference on each translated segment and trim artifacts using WhisperX.
 
     Args:
-        csv_path (Path): CSV with translated text and timestamps.
+        csv_path (Path): Translated CSV with start, end, text.
         output_dir_name (str): Subfolder for segment WAVs.
-        model_name (str): XTTS model name under MODEL_OUTPUT_PATH.
-        speaker_ref (str): Reference speaker name (without .wav).
-        language (str): Target synthesis language.
+        model_name (str): XTTS model name.
+        speaker_ref (str): Reference speaker name (no .wav).
+        language (str): Target language.
 
     Returns:
         List[Tuple[start, end, duration, Path]]: Segment metadata and audio paths.
@@ -62,10 +115,17 @@ def run_segment_inference(
         )
 
         audio = AudioSegment.from_wav(output_path).set_channels(1)
-        actual_duration = len(audio) / 1000  # in seconds
 
+        # Trim trailing non-word noise using WhisperX alignment
+        last_word_end = align_last_word_timestamp(output_path, text, language=language)
+        if last_word_end:
+            audio = audio[: int(last_word_end * 1000)]
+            audio.export(output_path, format="wav")
+            logger.debug(f"Trimmed to {last_word_end:.2f}s using WhisperX")
+
+        actual_duration = len(audio) / 1000
         segments.append((start, end, actual_duration, output_path))
-        logger.info(f"✅ Generated {output_name}.wav ({actual_duration:.2f}s)")
+        logger.info(f"Generated {output_name}.wav ({actual_duration:.2f}s)")
 
     return segments
 
@@ -74,11 +134,11 @@ def assemble_audio_from_segments(
     segments: List[Tuple[float, float, float, Path]], output_path: Path
 ) -> None:
     """
-    Assemble final audio by inserting silence and adjusting only overlapping segments.
+    Assemble final audio with silence and minimal compression for overlapping clips.
 
     Args:
-        segments (List[Tuple[start, end, actual_duration, Path]]): Audio segment metadata.
-        output_path (Path): Path to write the final assembled WAV.
+        segments (List[Tuple[start, end, actual_duration, Path]]): Audio segments.
+        output_path (Path): Output WAV file path.
     """
     final = AudioSegment.silent(duration=0)
     last_end = 0.0
@@ -92,13 +152,11 @@ def assemble_audio_from_segments(
         if i + 1 < len(segments):
             next_start = segments[i + 1][0]
             if start + actual_duration > next_start:
-                # Compression needed
                 target_duration = next_start - start
                 speed_factor = actual_duration / target_duration
                 logger.warning(
-                    f"⚠️ Segment {i} overlaps next: speeding up x{speed_factor:.2f}"
+                    f"Segment {i} overlaps next, speeding up x{speed_factor:.2f}"
                 )
-                # Speed up
                 audio = (
                     audio._spawn(
                         audio.raw_data,
@@ -112,7 +170,7 @@ def assemble_audio_from_segments(
         last_end = start + len(audio) / 1000
 
     final.export(output_path, format="wav")
-    logger.info(f"✅ Final stitched audio saved to {output_path}")
+    logger.info(f"Final stitched audio saved to {output_path}")
 
 
 @click.command()
@@ -120,13 +178,13 @@ def assemble_audio_from_segments(
     "--csv-path",
     type=Path,
     default=DATA_INFERENCE / "translated_segments.csv",
-    help="Path to translated CSV with start/end/text columns.",
+    help="Path to translated CSV with start/end/timestamps.",
 )
 @click.option(
     "--output-path",
     type=Path,
     default=DATA_INFERENCE / "final_audio.wav",
-    help="Output WAV file for final assembled audio.",
+    help="Path to save the final stitched WAV.",
 )
 @click.option(
     "--model-name",
@@ -138,17 +196,17 @@ def assemble_audio_from_segments(
     "--speaker-ref",
     type=str,
     default="ref_en",
-    help="Reference speaker WAV filename (without extension).",
+    help="Reference speaker WAV filename (no extension).",
 )
 @click.option(
     "--language",
     type=str,
     default="es",
-    help="Target language code (e.g. 'es', 'en').",
+    help="Target language code (e.g., 'es').",
 )
 def main(csv_path, output_path, model_name, speaker_ref, language):
-    """Run XTTS inference on translated segments and assemble full audio."""
-    logger.info("🚀 Running XTTS inference + reassembly...")
+    """Run XTTS inference with alignment-based cleanup and stitch audio with silence alignment."""
+    logger.info("Starting XTTS inference with WhisperX alignment...")
     segments = run_segment_inference(
         csv_path=csv_path,
         output_dir_name="tts_segments",
