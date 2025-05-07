@@ -8,15 +8,16 @@ alignment. Segments are only compressed if they would overlap the next.
 """
 
 from pathlib import Path
-import pandas as pd
-from pydub import AudioSegment
+
 import click
+import pandas as pd
 import torch
 import whisperx
+from pydub import AudioSegment
 
-from src.tts.xtts_inference import run_inference
 from src.constants import DATA_INFERENCE
 from src.logger_definition import get_logger
+from src.tts.xtts_inference import run_inference
 
 logger = get_logger(__file__)
 
@@ -95,8 +96,6 @@ def run_segment_inference(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for i, row in df.iterrows():
-        start = float(row["start"])
-        end = float(row["end"])
         text = row["text"]
         output_name = f"segment_{i:04d}"
         output_path = output_dir / f"{output_name}.wav"

@@ -10,12 +10,13 @@ Usage:
 """
 
 from pathlib import Path
-import pandas as pd
-from typing import List
+
 import click
-from src.translation.llm_service.services import LLMServiceFactory
-from src.constants import DATA_PROCESSED, DATA_INFERENCE, ROOT
+import pandas as pd
+
+from src.constants import DATA_INFERENCE, DATA_PROCESSED
 from src.logger_definition import get_logger
+from src.translation.llm_service.services import LLMServiceFactory
 
 logger = get_logger(__file__)
 
@@ -37,7 +38,7 @@ def load_segment_csvs(segments_dir: Path) -> pd.DataFrame:
     return pd.concat(dfs, ignore_index=True)
 
 
-def format_text_for_prompt(texts: List[str]) -> str:
+def format_text_for_prompt(texts: list[str]) -> str:
     """Wrap texts in <s> and </s> tags for LLM prompt.
 
     Args:
@@ -49,7 +50,7 @@ def format_text_for_prompt(texts: List[str]) -> str:
     return "\n".join(f"<s>{t}</s>" for t in texts)
 
 
-def extract_translations(response: str) -> List[str]:
+def extract_translations(response: str) -> list[str]:
     """Extract <s>translated text</s> lines from LLM response.
 
     Args:
