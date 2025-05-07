@@ -12,6 +12,11 @@ SRC = ROOT / "src"
 
 TTS = SRC / "tts"
 TRAINERS = TTS / "trainers"
+
+TRANSLATION = SRC / "translation"
+LLM_SERVICE = TRANSLATION / "llm_service"
+LLM_SERVICE_CONFIG = LLM_SERVICE / "llm-services-config.yaml"
+
 MODEL_CONFIG_PATH = TTS / "configs"
 
 MODEL_OUTPUT_PATH = ROOT / "models"

@@ -1,0 +1,40 @@
+backends:
+  samplev1:
+    model: "sample"
+    temperature: 0.5
+
+  gpt3-5:
+    model: "gpt-3.5-turbo"
+    temperature: 0.7
+
+  gpt-4:
+    model: "gpt-4"
+    temperature: 0.7
+
+services:
+  translator:
+    initial_prompt: |
+      You are tasked with translating a complex philosophical text from english to spanish.
+      The text is divided in phrases, but they are all part of a whole, so consider the
+      whole context for translation.
+      Each phrase is delimited with <s> and </s> tags.
+      Strictly output one translation for each phrase. Keep the order and do not add or remove any
+      items.
+      Use the following translations for the specific terms listed:
+      bulshit:charlatanería
+      Text:
+      {sliced_text}
+
+  prompt-tester:
+    initial_prompt: |
+      You are an LLM output tester. Your task is to determine whether the LLM output meets the given criterion.
+
+      ---- Expected Criterion ----
+      {expected_output}
+
+      ---- Output to Validate ----
+      {actual_output}
+
+      Respond with:
+      - "YES" and only the word "YES" if the output matches the criterion exactly
+      - "NO" if the output does not match, followed by a brief explanation
