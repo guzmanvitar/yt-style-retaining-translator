@@ -8,7 +8,6 @@ alignment. Segments are only compressed if they would overlap the next.
 """
 
 from pathlib import Path
-from typing import List, Tuple
 import pandas as pd
 from pydub import AudioSegment
 import click
