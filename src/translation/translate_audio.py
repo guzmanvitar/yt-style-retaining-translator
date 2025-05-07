@@ -79,7 +79,7 @@ def run_segment_inference(
     model_name: str = "production_latest",
     speaker_ref: str = "ref_en",
     language: str = "es",
-) -> List[Tuple[float, float, float, Path]]:
+) -> None:
     """
     Run TTS inference on each translated segment and trim artifacts using WhisperX.
 
@@ -90,14 +90,11 @@ def run_segment_inference(
         speaker_ref (str): Reference speaker name (no .wav).
         language (str): Target language.
 
-    Returns:
-        List[Tuple[start, end, duration, Path]]: Segment metadata and audio paths.
     """
     df = pd.read_csv(csv_path)
     output_dir = DATA_INFERENCE / output_dir_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    segments = []
     for i, row in df.iterrows():
         start = float(row["start"])
         end = float(row["end"])
@@ -120,57 +117,11 @@ def run_segment_inference(
         last_word_end = align_last_word_timestamp(output_path, text, language=language)
         if last_word_end:
             audio = audio[: int(last_word_end * 1000)]
-            audio.export(output_path, format="wav")
             logger.debug(f"Trimmed to {last_word_end:.2f}s using WhisperX")
 
+        audio.export(output_path, format="wav")
         actual_duration = len(audio) / 1000
-        segments.append((start, end, actual_duration, output_path))
         logger.info(f"Generated {output_name}.wav ({actual_duration:.2f}s)")
-
-    return segments
-
-
-def assemble_audio_from_segments(
-    segments: List[Tuple[float, float, float, Path]], output_path: Path
-) -> None:
-    """
-    Assemble final audio with silence and minimal compression for overlapping clips.
-
-    Args:
-        segments (List[Tuple[start, end, actual_duration, Path]]): Audio segments.
-        output_path (Path): Output WAV file path.
-    """
-    final = AudioSegment.silent(duration=0)
-    last_end = 0.0
-
-    for i, (start, end, actual_duration, path) in enumerate(segments):
-        gap = max(0.0, start - last_end)
-        final += AudioSegment.silent(duration=int(gap * 1000))
-
-        audio = AudioSegment.from_wav(path).set_channels(1)
-
-        if i + 1 < len(segments):
-            next_start = segments[i + 1][0]
-            if start + actual_duration > next_start:
-                target_duration = next_start - start
-                speed_factor = actual_duration / target_duration
-                logger.warning(
-                    f"Segment {i} overlaps next, speeding up x{speed_factor:.2f}"
-                )
-                audio = (
-                    audio._spawn(
-                        audio.raw_data,
-                        overrides={"frame_rate": int(audio.frame_rate * speed_factor)},
-                    )
-                    .set_frame_rate(audio.frame_rate)
-                    .set_channels(1)
-                )
-
-        final += audio
-        last_end = start + len(audio) / 1000
-
-    final.export(output_path, format="wav")
-    logger.info(f"Final stitched audio saved to {output_path}")
 
 
 @click.command()
@@ -179,12 +130,6 @@ def assemble_audio_from_segments(
     type=Path,
     default=DATA_INFERENCE / "translated_segments.csv",
     help="Path to translated CSV with start/end/timestamps.",
-)
-@click.option(
-    "--output-path",
-    type=Path,
-    default=DATA_INFERENCE / "final_audio.wav",
-    help="Path to save the final stitched WAV.",
 )
 @click.option(
     "--model-name",
@@ -204,17 +149,16 @@ def assemble_audio_from_segments(
     default="es",
     help="Target language code (e.g., 'es').",
 )
-def main(csv_path, output_path, model_name, speaker_ref, language):
+def main(csv_path, model_name, speaker_ref, language):
     """Run XTTS inference with alignment-based cleanup and stitch audio with silence alignment."""
     logger.info("Starting XTTS inference with WhisperX alignment...")
-    segments = run_segment_inference(
+    run_segment_inference(
         csv_path=csv_path,
         output_dir_name="tts_segments",
         model_name=model_name,
         speaker_ref=speaker_ref,
         language=language,
     )
-    assemble_audio_from_segments(segments, output_path)
 
 
 if __name__ == "__main__":
