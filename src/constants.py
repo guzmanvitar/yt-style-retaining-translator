@@ -27,6 +27,7 @@ DATA = ROOT / "data"
 DATA_RAW = DATA / "raw"
 DATA_PROCESSED = DATA / "processed"
 DATA_INFERENCE = DATA / "inference"
+DATA_FINAL = DATA / "final"
 
 TESTS_DIR = ROOT / "tests"
 
@@ -43,3 +44,5 @@ XTTS_PRETRAINED_DIR = (
 LOGS.mkdir(exist_ok=True, parents=True)
 DATA_RAW.mkdir(exist_ok=True, parents=True)
 DATA_PROCESSED.mkdir(exist_ok=True, parents=True)
+DATA_INFERENCE.mkdir(exist_ok=True, parents=True)
+DATA_FINAL.mkdir(exist_ok=True, parents=True)
