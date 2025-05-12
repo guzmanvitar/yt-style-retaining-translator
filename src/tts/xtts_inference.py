@@ -6,12 +6,12 @@ from input text in a target language and voice style. It supports command-line
 arguments for flexible invocation.
 """
 
+import argparse
 from datetime import datetime
 
-import argparse
-
 from TTS.api import TTS
-from src.constants import MODEL_OUTPUT_PATH, DATA_INFERENCE
+
+from src.constants import DATA_INFERENCE, MODEL_OUTPUT_PATH
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)

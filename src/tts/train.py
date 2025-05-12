@@ -5,7 +5,8 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from src.constants import TRAINERS, MODEL_CONFIG_PATH
+
+from src.constants import MODEL_CONFIG_PATH, TRAINERS
 
 SCRIPT_PATHS = {
     "vits": TRAINERS / "train_vits.py",

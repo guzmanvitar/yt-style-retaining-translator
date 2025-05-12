@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 from trainer import Trainer, TrainerArgs
-
 from TTS.tts.configs.shared_configs import BaseDatasetConfig, CharactersConfig
 from TTS.tts.configs.vits_config import VitsArgs, VitsAudioConfig, VitsConfig
 from TTS.tts.datasets import load_tts_samples
