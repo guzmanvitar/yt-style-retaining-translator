@@ -10,6 +10,7 @@ dependencies = [
     "gcloud>=0.18.3",
     "langchain>=0.3.25",
     "langchain-community>=0.3.23",
+    "librosa>=0.11.0",
     "numpy==2.2.5",
     "openai>=1.77.0",
     "openai-whisper>=20240930",
