@@ -65,7 +65,9 @@ def extract_video_segment(
     logger.info(
         f"Extracting video segment: {start:.2f}s for {duration:.3f}s (slowdown={slowdown_factor})"
     )
-    subprocess.run(cmd, check=True)
+    subprocess.run(
+        cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
 
 
 def get_video_duration(video_path: Path) -> float:
@@ -133,7 +135,9 @@ def align_and_export_segments(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     final_audio = AudioSegment.silent(duration=0)
-    timeline_cursor = 0.0
+
+    audio_cursor = 0.0
+    video_cursor = 0.0
 
     for i, row in df.iterrows():
         start = row["start"]
@@ -150,7 +154,7 @@ def align_and_export_segments(
         actual_duration = len(y_raw) / sr_raw
 
         required_buffer = buffer_silence_sec
-        pre_silence = max(0.0, start - timeline_cursor)
+        pre_silence = max(0.0, start - audio_cursor)
         available_slot = next_start - start - required_buffer
         extended_room = pre_silence + available_slot
 
@@ -162,67 +166,77 @@ def align_and_export_segments(
 
         if actual_duration <= available_slot:
             if pre_silence > 0:
-                current_segment += AudioSegment.silent(duration=int(pre_silence * 1000))
+                current_segment += AudioSegment.silent(
+                    duration=round(pre_silence * 1000)
+                )
             current_segment += audio + AudioSegment.silent(
-                duration=int(required_buffer * 1000)
+                duration=round(required_buffer * 1000)
             )
 
         elif actual_duration <= extended_room:
-            shift = min(pre_silence, actual_duration - available_slot)
+            shift = actual_duration - available_slot
             silence_before = pre_silence - shift
             if silence_before > 0:
                 current_segment += AudioSegment.silent(
-                    duration=int(silence_before * 1000)
+                    duration=round(silence_before * 1000)
                 )
             current_segment += audio + AudioSegment.silent(
-                duration=int(required_buffer * 1000)
+                duration=round(required_buffer * 1000)
             )
 
         else:
             speedup_rate = actual_duration / extended_room
+            y, sr = load_audio(path)
             if speedup_rate <= max_acceleration:
-                y, sr = load_audio(path)
                 accelerated = accelerate_audio(y, sr, rate=speedup_rate)
                 current_segment += accelerated + AudioSegment.silent(
-                    duration=int(required_buffer * 1000)
+                    duration=round(required_buffer * 1000)
                 )
             else:
-                y, sr = load_audio(path)
                 accelerated = accelerate_audio(y, sr, rate=max_acceleration)
                 current_segment += accelerated + AudioSegment.silent(
-                    duration=int(required_buffer * 1000)
+                    duration=round(required_buffer * 1000)
                 )
-                slowdown_factor = round(
-                    (actual_duration / max_acceleration + required_buffer)
-                    / extended_room,
-                    3,
-                )
+                slowdown_factor = (
+                    actual_duration / max_acceleration + required_buffer
+                ) / extended_room
 
         # Export and measure precise audio duration
         current_segment.export(audio_out_path, format="wav")
         y_final, sr_final = sf.read(audio_out_path)
         segment_duration = len(y_final) / sr_final
-        video_end_time = timeline_cursor + segment_duration
 
-        # Clip to actual video duration if needed
-        clipped_video_end_time = min(video_end_time, video_duration)
-        clip_diff = video_end_time - clipped_video_end_time
-        if clip_diff > 0.2:
-            logger.warning(
-                f"Segment {i:04d}: Clipped video_end_time by {clip_diff:.3f}s to fit inside video"
-                " bounds."
-            )
+        # Determine how much raw video to extract before slowdown
+        raw_video_duration = (
+            segment_duration / slowdown_factor if slowdown_factor else segment_duration
+        )
+        video_end_time = min(video_cursor + raw_video_duration, video_duration)
 
         extract_video_segment(
             video_path,
-            timeline_cursor,
-            clipped_video_end_time,
+            video_cursor,
+            video_end_time,
             video_out_path,
             slowdown_factor,
         )
 
         final_audio += current_segment
-        timeline_cursor = clipped_video_end_time
+        audio_cursor += segment_duration
+        video_cursor += raw_video_duration
+
+    if video_cursor < video_duration:
+        leftover_segment = output_dir / f"segment_{i + 1:04d}_video.mp4"
+        extract_video_segment(
+            video_path,
+            video_cursor,
+            video_duration,
+            leftover_segment,
+            slowdown_factor=None,
+        )
+        logger.info(
+            f"Added leftover video segment from {video_cursor:.2f}s to end of video"
+            " ({video_duration:.2f}s)"
+        )
 
     stitched_audio_path = output_dir / "final_audio.wav"
     final_audio.export(stitched_audio_path, format="wav")
@@ -262,11 +276,14 @@ def concat_and_merge(output_dir: Path, cleanup: bool = True):
         str(concatenated_video),
         "-i",
         str(final_audio),
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
         "-c:v",
         "copy",
         "-c:a",
         "aac",
-        "-shortest",
         str(final_video),
     ]
     subprocess.run(cmd_merge, check=True)
