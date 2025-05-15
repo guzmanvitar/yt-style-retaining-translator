@@ -82,16 +82,6 @@ def extract_video_segment(
     )
     clip.close()
 
-    # Re-read to confirm achieved duration
-    meta = ffmpeg.probe(str(output_path))
-    achieved_duration = float(meta["format"]["duration"])
-    diff = abs(achieved_duration - target_duration)
-    if diff > 0.01:
-        logger.warning(
-            f"Segment written to {output_path.name} has diff={diff:.3f}s actual="
-            "{achieved_duration:.3f}s vs. target={target_duration:.3f}s)"
-        )
-
 
 def get_video_duration(video_path: Path) -> float:
     """
@@ -153,18 +143,29 @@ def align_and_export_segments(
         if not video_path:
             raise FileNotFoundError("No .mp4 video found in the directory.")
 
-    video_duration = get_video_duration(video_path)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    final_audio = AudioSegment.silent(duration=0)
+    # Write first silence block for audio and video
+    audio_start = df.iloc[0]["start"]
+    final_audio = AudioSegment.silent(duration=round(audio_start * 1000))
+    final_audio.export(output_dir / "segment_00000_pre_audio.wav", format="wav")
 
-    audio_cursor = 0.0
-    video_cursor = 0.0
+    video_duration = get_video_duration(video_path)
+    extract_video_segment(
+        video_path,
+        0.0,
+        audio_start,
+        output_dir / "segment_00000_pre_video.mp4",
+    )
 
+    # Iterate over segments
     for i, row in df.iterrows():
+        # Original start and end times from transcription
         start = row["start"]
         end = row["end"]
         next_start = df.iloc[i + 1]["start"] if i + 1 < len(df) else end
+
+        # Load translated audio segment and calculate duration
         path = segment_dir / f"segment_{i:04d}.wav"
 
         if not path.exists():
@@ -172,43 +173,32 @@ def align_and_export_segments(
             continue
 
         audio = AudioSegment.from_wav(path).set_channels(1)
-        y_raw, sr_raw = sf.read(path)
-        actual_duration = len(y_raw) / sr_raw
+        y, sr = sf.read(path)
+        actual_duration = len(y) / sr
 
-        required_buffer = buffer_silence_sec
-        pre_silence = max(0.0, start - audio_cursor)
-        available_slot = next_start - start - required_buffer
-        extended_room = pre_silence + available_slot
+        # Calculate available time to insert the translated audio
+        raw_slot = next_start - start
+        if raw_slot - buffer_silence_sec > 0.1:
+            available_slot = raw_slot - buffer_silence_sec
+            required_buffer = buffer_silence_sec
+        else:
+            available_slot = raw_slot
+            required_buffer = 0.0
 
-        audio_out_path = output_dir / f"segment_{i:04d}_audio.wav"
-        video_out_path = output_dir / f"segment_{i:04d}_video.mp4"
+        # Start loop variables
         slowdown_factor = None
-
         current_segment = AudioSegment.silent(duration=0)
 
         if actual_duration <= available_slot:
-            if pre_silence > 0:
-                current_segment += AudioSegment.silent(
-                    duration=round(pre_silence * 1000)
-                )
-            current_segment += audio + AudioSegment.silent(
-                duration=round(required_buffer * 1000)
-            )
-
-        elif actual_duration <= extended_room:
-            shift = actual_duration - available_slot
-            silence_before = pre_silence - shift
-            if silence_before > 0:
-                current_segment += AudioSegment.silent(
-                    duration=round(silence_before * 1000)
-                )
-            current_segment += audio + AudioSegment.silent(
-                duration=round(required_buffer * 1000)
+            remaining_silence = available_slot - actual_duration
+            current_segment += (
+                audio
+                + AudioSegment.silent(duration=round(required_buffer * 1000))
+                + AudioSegment.silent(duration=round(remaining_silence * 1000))
             )
 
         else:
-            speedup_rate = actual_duration / extended_room
-            y, sr = load_audio(path)
+            speedup_rate = actual_duration / available_slot
             if speedup_rate <= max_acceleration:
                 accelerated = accelerate_audio(y, sr, rate=speedup_rate)
                 current_segment += accelerated + AudioSegment.silent(
@@ -219,52 +209,46 @@ def align_and_export_segments(
                 current_segment += accelerated + AudioSegment.silent(
                     duration=round(required_buffer * 1000)
                 )
-                slowdown_factor = (
-                    actual_duration / max_acceleration + required_buffer
-                ) / extended_room
+                slowdown_factor = len(current_segment) / (raw_slot * 1000)
 
-        # Export and measure precise audio duration
+        # Export current segment
+        audio_out_path = output_dir / f"segment_{i:04d}_audio.wav"
         current_segment.export(audio_out_path, format="wav")
-        y_final, sr_final = sf.read(audio_out_path)
-        segment_duration = len(y_final) / sr_final
 
-        # Determine how much raw video to extract before slowdown
-        raw_video_duration = (
-            segment_duration / slowdown_factor if slowdown_factor else segment_duration
-        )
-        video_end_time = min(video_cursor + raw_video_duration, video_duration)
-
+        # Export video segment
+        video_out_path = output_dir / f"segment_{i:04d}_video.mp4"
         extract_video_segment(
             video_path,
-            video_cursor,
-            video_end_time,
+            start,
+            next_start,
             video_out_path,
             slowdown_factor,
         )
 
         # Debug: compare extracted video vs audio segment duration
+        y_final, sr_final = sf.read(audio_out_path)
+        segment_duration = len(y_final) / sr_final
+
         video_segment_duration = get_video_duration(video_out_path)
         duration_diff = abs(video_segment_duration - segment_duration)
-        if duration_diff > 0.01:
+        if duration_diff > 0.05:
             logger.warning(
                 f"Segment {i:04d}: audio {segment_duration:.3f}s ≠ video "
                 f"{video_segment_duration:.3f}s (diff = {duration_diff:.3f}s)"
             )
 
         final_audio += current_segment
-        audio_cursor += segment_duration
-        video_cursor += raw_video_duration
 
-    if video_cursor < video_duration:
+    if end < video_duration:
         leftover_segment = output_dir / f"segment_{i + 1:04d}_video.mp4"
         extract_video_segment(
             video_path,
-            video_cursor,
+            end,
             video_duration,
             leftover_segment,
         )
         logger.info(
-            f"Added leftover video segment from {video_cursor:.2f}s to end of video"
+            f"Added leftover video segment from {end:.2f}s to end of video"
             " ({video_duration:.2f}s)"
         )
 
@@ -336,8 +320,8 @@ def concat_and_merge(output_dir: Path, cleanup: bool = True):
 )
 @click.option("--video-name", type=str, default=None)
 @click.option("--output-dir", type=Path, default=DATA_FINAL / "aligned_segments")
-@click.option("--max-acceleration", type=float, default=1.25)
-@click.option("--buffer", "buffer_silence_sec", type=float, default=0)
+@click.option("--max-acceleration", type=float, default=1.15)
+@click.option("--buffer", "buffer_silence_sec", type=float, default=0.25)
 @click.option(
     "--merge/--no-merge",
     default=True,
