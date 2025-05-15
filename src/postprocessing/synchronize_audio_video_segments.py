@@ -9,10 +9,12 @@ import subprocess
 from pathlib import Path
 
 import click
+import ffmpeg
 import librosa
 import pandas as pd
 import pyrubberband as pyrb
 import soundfile as sf
+from moviepy import VideoFileClip
 from pydub import AudioSegment
 
 from src.constants import DATA_FINAL, DATA_INFERENCE, DATA_RAW
@@ -42,32 +44,53 @@ def extract_video_segment(
     output_path: Path,
     slowdown_factor: float | None = None,
 ):
-    """Extract a video segment with duration matching the audio precisely."""
-    vf_filter = "fps=30"
-    if slowdown_factor:
-        vf_filter = f"setpts={slowdown_factor}*PTS,fps=30"
+    """
+    Extracts a subclip from the video between `start` and `end`, optionally stretching it
+    in time using `slowdown_factor` to match an audio duration. Uses MoviePy for precision.
 
-    duration = end - start
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-ss",
-        str(start),
-        "-t",
-        str(duration),
-        "-i",
-        str(input_path),
-        "-vf",
-        vf_filter,
-        "-an",
-        str(output_path),
-    ]
+    Args:
+        input_path (Path): Path to the input video.
+        start (float): Start time of the segment (in seconds).
+        end (float): End time of the segment (in seconds).
+        output_path (Path): Where to save the output video.
+        slowdown_factor (float, optional): Factor by which to stretch the clip duration.
+            E.g., 1.2 will make the clip 20% longer.
+    """
+    raw_duration = end - start
+    target_duration = (
+        raw_duration * slowdown_factor if slowdown_factor else raw_duration
+    )
+
     logger.info(
-        f"Extracting video segment: {start:.2f}s for {duration:.3f}s (slowdown={slowdown_factor})"
+        f"Extracting video segment: {start:.2f}s to {end:.2f}s "
+        f"(raw={raw_duration:.3f}s → target={target_duration:.3f}s, slowdown={slowdown_factor})"
     )
-    subprocess.run(
-        cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+
+    clip = VideoFileClip(str(input_path)).subclipped(start_time=start, end_time=end)
+
+    if slowdown_factor:
+        speed_factor = 1 / slowdown_factor
+        clip = clip.with_speed_scaled(factor=speed_factor)
+
+    clip.write_videofile(
+        str(output_path),
+        codec="libx264",
+        audio=False,
+        preset="fast",
+        fps=30,
+        logger=None,
     )
+    clip.close()
+
+    # Re-read to confirm achieved duration
+    meta = ffmpeg.probe(str(output_path))
+    achieved_duration = float(meta["format"]["duration"])
+    diff = abs(achieved_duration - target_duration)
+    if diff > 0.01:
+        logger.warning(
+            f"Segment written to {output_path.name} has diff={diff:.3f}s actual="
+            "{achieved_duration:.3f}s vs. target={target_duration:.3f}s)"
+        )
 
 
 def get_video_duration(video_path: Path) -> float:
@@ -80,7 +103,6 @@ def get_video_duration(video_path: Path) -> float:
     Returns:
         float: Duration of the video in seconds.
     """
-    import ffmpeg
 
     probe = ffmpeg.probe(str(video_path))
     return float(probe["format"]["duration"])
@@ -220,6 +242,15 @@ def align_and_export_segments(
             slowdown_factor,
         )
 
+        # Debug: compare extracted video vs audio segment duration
+        video_segment_duration = get_video_duration(video_out_path)
+        duration_diff = abs(video_segment_duration - segment_duration)
+        if duration_diff > 0.01:
+            logger.warning(
+                f"Segment {i:04d}: audio {segment_duration:.3f}s ≠ video "
+                f"{video_segment_duration:.3f}s (diff = {duration_diff:.3f}s)"
+            )
+
         final_audio += current_segment
         audio_cursor += segment_duration
         video_cursor += raw_video_duration
@@ -231,7 +262,6 @@ def align_and_export_segments(
             video_cursor,
             video_duration,
             leftover_segment,
-            slowdown_factor=None,
         )
         logger.info(
             f"Added leftover video segment from {video_cursor:.2f}s to end of video"
@@ -307,7 +337,7 @@ def concat_and_merge(output_dir: Path, cleanup: bool = True):
 @click.option("--video-name", type=str, default=None)
 @click.option("--output-dir", type=Path, default=DATA_FINAL / "aligned_segments")
 @click.option("--max-acceleration", type=float, default=1.25)
-@click.option("--buffer", "buffer_silence_sec", type=float, default=0.5)
+@click.option("--buffer", "buffer_silence_sec", type=float, default=0)
 @click.option(
     "--merge/--no-merge",
     default=True,
