@@ -4,6 +4,7 @@ import argparse
 import csv
 from pathlib import Path
 from shutil import copy2
+
 from pydub import AudioSegment
 
 from src.constants import DATA_COQUI, DATA_PROCESSED
