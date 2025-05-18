@@ -1,8 +1,8 @@
 """Resample WAV audio files from YouTube downloads to multiple target sample rates."""
 
-import argparse
 from pathlib import Path
 
+import click
 from pydub import AudioSegment
 
 from src.constants import DATA_PROCESSED, DATA_RAW
@@ -30,21 +30,17 @@ def convert_audio(input_path: Path, output_dir: Path, sample_rate: int) -> None:
     logger.info("Saved %d Hz mono WAV to %s", sample_rate, output_path)
 
 
-def main():
+@click.command()
+@click.option(
+    "--sample-rates",
+    multiple=True,
+    type=int,
+    default=(16000, 22050),
+    help="Target sample rates in Hz. Can be specified multiple times, e.g., --sample-rates 16000"
+    " --sample-rates 22050",
+)
+def main(sample_rates):
     """Resamples all WAV files in the input directory to the specified sample rates."""
-    parser = argparse.ArgumentParser(
-        description="Resample WAV audio to multiple sample rates."
-    )
-    parser.add_argument(
-        "--sample-rates",
-        nargs="+",
-        type=int,
-        default=[16000, 22050],
-        help="List of target sample rates in Hz (default: 16000 22050).",
-    )
-
-    args = parser.parse_args()
-
     input_dir = DATA_RAW / "audios"
     if not input_dir.exists():
         logger.error("Input directory does not exist: %s", input_dir)
@@ -56,8 +52,9 @@ def main():
         return
 
     for wav_path in wav_files:
-        for sr in args.sample_rates:
-            output_dir = DATA_PROCESSED / f"{sr}hz"
+        for sr in sample_rates:
+            output_dir = DATA_PROCESSED / wav_path.stem / f"{sr}hz"
+            output_dir.mkdir(parents=True, exist_ok=True)
             convert_audio(wav_path, output_dir, sr)
 
 
