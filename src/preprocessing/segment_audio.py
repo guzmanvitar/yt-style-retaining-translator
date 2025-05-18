@@ -7,6 +7,7 @@ from typing import Any
 import click
 import pandas as pd
 import torch
+import torchaudio
 import whisperx
 from pydub import AudioSegment, silence
 
@@ -100,29 +101,33 @@ def chunk_aligned_audio_versions(
 
 
 def transcribe_and_align(
-    audio_path: Path, model_size: str = "large-v3", language: str = "en"
+    audio_path: Path,
+    transcription_model: whisperx.asr.FasterWhisperPipeline,
+    alignment_model: torchaudio.models.wav2vec2.model.Wav2Vec2Model,
+    alignment_metadata: dict,
+    language: str = "en",
 ) -> list[dict[str, Any]]:
     """
     Transcribe and align a WAV audio file using WhisperX.
 
     Args:
         audio_path (Path): Path to input WAV file.
-        model_size (str): Whisper model name (e.g., "base", "large-v3").
+        model (whisperx.asr.FasterWhisperPipeline): Instantiated Whisper transcription model.
+        alignment_model (torchaudio.models.wav2vec2.model.Wav2Vec2Model): Instantiated Whisper
+            alignment model.
+        alignment_metadata (dict): Metadata for alignment model.
         language (str): Language code to force (default: "en").
 
     Returns:
         list[dict[str, Any]]: List of segment dictionaries with start, end, and text.
     """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info("Transcribing %s with language=%s...", audio_path.name, language)
-
-    model = whisperx.load_model(model_size, device, compute_type="int8")
-    result = model.transcribe(str(audio_path), language=language)
+    result = transcription_model.transcribe(str(audio_path), language=language)
 
     logger.info("Aligning timestamps...")
-    model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     result_aligned = whisperx.align(
-        result["segments"], model_a, metadata, str(audio_path), device
+        result["segments"], alignment_model, alignment_metadata, str(audio_path), device
     )
 
     return result_aligned["segments"]
@@ -193,8 +198,10 @@ def segment_audio(
     segments: list[dict[str, Any]],
     chunks_dir: Path,
     csv_path: Path,
+    transcription_model: whisperx.asr.FasterWhisperPipeline,
+    alignment_model: torchaudio.models.wav2vec2.model.Wav2Vec2Model,
+    alignment_metadata: dict,
     global_offset: float = 0.0,
-    model_size: str = "large-v3",
     language: str = "en",
 ) -> None:
     """
@@ -209,8 +216,12 @@ def segment_audio(
         segments (list[dict]): List of dictionaries with 'start', 'end', and 'text' fields.
         chunks_dir (Path): Directory where output audio chunks will be saved.
         csv_path (Path): Path to save the resulting segment metadata CSV.
+        model_size (str): Whisper model size for re-alignment (default: "large-v3").
+        model (whisperx.asr.FasterWhisperPipeline): Instantiated Whisper transcription model.
+        alignment_model (torchaudio.models.wav2vec2.model.Wav2Vec2Model): Instantiated Whisper
+            alignment model.
+        alignment_metadata (dict): Metadata for alignment model.
         global_offset (float): Time offset (in seconds) to apply to all timestamps.
-        model_size (str): Whisper model size for re-alignment (default: "large-v3").\
         language (str): Language for transcription.
     """
     audio = AudioSegment.from_wav(audio_path)
@@ -250,7 +261,11 @@ def segment_audio(
                 )
 
                 sub_segments = transcribe_and_align(
-                    temp_path, model_size=model_size, language=language
+                    temp_path,
+                    transcription_model=transcription_model,
+                    alignment_model=alignment_model,
+                    alignment_metadata=alignment_metadata,
+                    language=language,
                 )
                 text = " ".join(
                     s["text"]
@@ -295,7 +310,7 @@ def segment_audio(
 
 @click.command()
 @click.option(
-    "--model",
+    "--model-size",
     type=str,
     default="large-v3",
     help="Whisper model to use for transcription (default: large-v3).",
@@ -306,10 +321,16 @@ def segment_audio(
     default="en",
     help="Language for Whisper transcription.",
 )
-def main(model: str, language: str) -> None:
+def main(model_size: str, language: str) -> None:
     """
     Iterate over all processed audio folders and run segmentation on each one.
     """
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    transcription_model = whisperx.load_model(model_size, device, compute_type="int8")
+    alignment_model, metadata = whisperx.load_align_model(
+        language_code=language, device=device
+    )
+
     for audio_dir in DATA_PROCESSED.iterdir():
         if not audio_dir.is_dir():
             continue
@@ -371,15 +392,21 @@ def main(model: str, language: str) -> None:
         ):
             csv_path = output_dir / f"{chunk_22k.stem}_segments.csv"
             segments = transcribe_and_align(
-                chunk_16k, model_size=model, language=language
+                chunk_16k,
+                transcription_model=transcription_model,
+                alignment_model=alignment_model,
+                alignment_metadata=metadata,
+                language=language,
             )
             segment_audio(
                 chunk_22k,
                 segments,
                 chunk_dir,
                 csv_path,
+                transcription_model=transcription_model,
+                alignment_model=alignment_model,
+                alignment_metadata=metadata,
                 global_offset=offset,
-                model_size=model,
                 language=language,
             )
 
