@@ -19,6 +19,7 @@ dependencies = [
     "pandas>=2.2.3",
     "pydub>=0.25.1",
     "pyrubberband>=0.4.0",
+    "secretstorage>=3.3.3",
     "torch==2.7.0",
     "torchaudio==2.7.0",
     "transformers>=4.51.3",
