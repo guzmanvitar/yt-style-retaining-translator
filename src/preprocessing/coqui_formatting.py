@@ -1,10 +1,10 @@
 """Convert segmented audio and transcription files into a Coqui TTS training dataset."""
 
-import argparse
 import csv
 from pathlib import Path
 from shutil import copy2
 
+import click
 from pydub import AudioSegment
 
 from src.constants import DATA_COQUI, DATA_PROCESSED
@@ -13,6 +13,25 @@ from src.logger_definition import get_logger
 logger = get_logger(__file__)
 
 
+@click.command()
+@click.option(
+    "--segments-dir",
+    type=click.Path(path_type=Path),
+    default=DATA_PROCESSED / "segments",
+    help="Directory containing segmented CSV files (default: data/processed/segments)",
+)
+@click.option(
+    "--chunks-dir",
+    type=click.Path(path_type=Path),
+    default=DATA_PROCESSED / "segments" / "chunks",
+    help="Directory containing audio chunk files (default: data/processed/segments/chunks)",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default=DATA_COQUI,
+    help="Output directory for prepared dataset (default: data/coqui)",
+)
 def merge_coqui_csvs_and_audio(
     segments_dir: Path,
     chunks_dir: Path,
@@ -68,34 +87,5 @@ def merge_coqui_csvs_and_audio(
     logger.info("Wrote %d samples to %s", rows_written, metadata_path)
 
 
-def main() -> None:
-    """Run Coqui dataset preparation by merging all segmented CSVs in a directory."""
-    parser = argparse.ArgumentParser(
-        description="Prepare full dataset for Coqui TTS training."
-    )
-    parser.add_argument(
-        "--segments-dir",
-        type=Path,
-        default=DATA_PROCESSED / "segments",
-        help="Directory containing segmented CSV files (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--chunks-dir",
-        type=Path,
-        default=DATA_PROCESSED / "segments" / "chunks",
-        help="Directory containing audio chunk files (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=DATA_COQUI,
-        help="Output directory for prepared dataset (default: %(default)s)",
-    )
-
-    args = parser.parse_args()
-
-    merge_coqui_csvs_and_audio(args.segments_dir, args.chunks_dir, args.output_dir)
-
-
 if __name__ == "__main__":
-    main()
+    merge_coqui_csvs_and_audio()
