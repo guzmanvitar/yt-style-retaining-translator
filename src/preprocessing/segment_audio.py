@@ -1,9 +1,9 @@
 """Transcribe and segment WAV audio into aligned chunks using the WhisperX Python API."""
 
-import argparse
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
+import click
 import pandas as pd
 import torch
 import whisperx
@@ -135,7 +135,7 @@ def split_segment_on_silence(
     min_silence_len: int = 300,
     silence_thresh: int = -40,
     keep_silence: int = 150,
-) -> List[tuple[float, float]]:
+) -> list[tuple[float, float]]:
     """
     Recursively split a long audio segment into shorter ones using silence detection.
 
@@ -290,25 +290,29 @@ def segment_audio(
             logger.warning(f"Failed to delete temp file {f}: {e}")
 
 
-def main() -> None:
+@click.command()
+@click.option(
+    "--model",
+    type=str,
+    default="large-v3",
+    help="Whisper model to use for transcription (default: large-v3).",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default=DATA_PROCESSED / "segments",
+    help="Directory to store segmented chunks and CSVs (default: data/processed/segments).",
+)
+def main(model: str, output_dir: Path) -> None:
     """
     Orchestrate audio chunking, transcription, segmentation, and re-alignment.
 
-    This function processes 16kHz and 22kHz aligned audio pairs:
-    - Chunks the audio based on silence in the 22kHz version.
-    - Transcribes and aligns each 16kHz chunk using WhisperX.
-    - Segments the aligned transcription into individual audio clips.
-    - Splits long segments, re-aligns them, and saves clean output with metadata.
-
-    Command-line Args:
-        --model (str): Whisper model to use for transcription (default: "large-v3").
-        --output-dir (Path): Directory to store segmented chunks and CSVs.
+    This processes 16kHz and 22kHz aligned audio pairs:
+    - Chunks audio based on silence in the 22kHz version.
+    - Transcribes 16kHz chunks with WhisperX.
+    - Segments and re-aligns transcriptions.
+    - Outputs clean clips and metadata.
     """
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="large-v3")
-    parser.add_argument("--output-dir", type=Path, default=DATA_PROCESSED / "segments")
-    args = parser.parse_args()
-
     input_dir = DATA_PROCESSED / "16000hz"
     segment_source_dir = DATA_PROCESSED / "22050hz"
     temp_base = Path("tmp/segments")
@@ -318,6 +322,7 @@ def main() -> None:
     for audio_path in input_dir.glob("*.wav"):
         base_name = audio_path.stem.replace("_16000", "")
         segment_path = segment_source_dir / f"{base_name}_22050.wav"
+
         if not segment_path.exists():
             logger.warning("Missing 22050Hz audio for %s", base_name)
             continue
@@ -330,15 +335,15 @@ def main() -> None:
         )
 
         for (chunk_16k, chunk_22k), offset in zip(chunk_groups, chunk_offsets):
-            segments = transcribe_and_align(chunk_16k, model_size=args.model)
-            csv_path = args.output_dir / f"{chunk_22k.stem}_segments.csv"
+            segments = transcribe_and_align(chunk_16k, model_size=model)
+            csv_path = output_dir / f"{chunk_22k.stem}_segments.csv"
             segment_audio(
                 chunk_22k,
                 segments,
-                args.output_dir / "chunks",
+                output_dir / "chunks",
                 csv_path,
                 global_offset=offset,
-                model_size=args.model,
+                model_size=model,
             )
 
 
