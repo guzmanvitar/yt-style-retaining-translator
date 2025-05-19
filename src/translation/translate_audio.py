@@ -4,7 +4,7 @@ TTS Inference and Audio Assembly Pipeline.
 This script performs text-to-speech (TTS) inference using a translated transcription CSV,
 generates audio for each segment using an XTTS model, aligns each generated clip using
 WhisperX to trim trailing artifacts, and stitches all segments together with silence
-alignment. Segments are only compressed if they would overlap the next.
+alignment.
 """
 
 from pathlib import Path
@@ -12,10 +12,12 @@ from pathlib import Path
 import click
 import pandas as pd
 import torch
+import torchaudio
 import whisperx
 from pydub import AudioSegment
+from TTS.api import TTS
 
-from src.constants import DATA_INFERENCE
+from src.constants import DATA_INFERENCE, MODEL_OUTPUT_PATH
 from src.logger_definition import get_logger
 from src.tts.xtts_inference import run_inference
 
@@ -23,6 +25,8 @@ logger = get_logger(__file__)
 
 
 def align_last_word_timestamp(
+    alignment_model: torchaudio.models.wav2vec2.model.Wav2Vec2Model,
+    alignment_metadata: dict,
     audio_path: Path,
     text: str,
     language: str = "es",
@@ -33,6 +37,9 @@ def align_last_word_timestamp(
     Align known text to audio using WhisperX and return a padded end time for trimming.
 
     Args:
+        alignment_model (torchaudio.models.wav2vec2.model.Wav2Vec2Model): Instantiated Whisper
+            alignment model.
+        alignment_metadata (dict): Metadata for alignment model.
         audio_path (Path): Path to WAV file.
         text (str): Transcript to align.
         language (str): Language code (e.g., 'es').
@@ -53,11 +60,10 @@ def align_last_word_timestamp(
         "segments": [{"start": 0.0, "end": padded_alignment_end, "text": text}],
     }
 
-    model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
     aligned_result = whisperx.align(
         fake_transcript["segments"],
-        model_a,
-        metadata,
+        alignment_model,
+        alignment_metadata,
         str(audio_path),
         device,
     )
@@ -81,8 +87,8 @@ def align_last_word_timestamp(
 
 def run_segment_inference(
     csv_path: Path,
-    output_dir_name: str = "tts_segments",
-    model_name: str = "production_latest",
+    tts_model: TTS,
+    output_dir: Path,
     speaker_ref: str = "ref_en",
     language: str = "es",
     sentence_buffer_sec: float = 0.5,
@@ -103,16 +109,20 @@ def run_segment_inference(
 
     Args:
         csv_path (Path): CSV file with 'text', 'start', 'end' fields.
-        output_dir_name (str): Folder under `data/inference` to save outputs.
-        model_name (str): Name of XTTS model folder.
+        tts_model (TTS.api.TTS): TTS trained model.
+        output_dir (str): Output saving dir.
         speaker_ref (str): Speaker reference filename (without extension).
         language (str): Target language code (e.g., 'es').
         sentence_buffer_sec (float): Silence in seconds between joined sentence clips.
         n_variants_per_sentence (int): Number of XTTS generations per sentence (default: 2).
     """
     df = pd.read_csv(csv_path)
-    output_dir = DATA_INFERENCE / output_dir_name
-    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Initialize Whisper alignment model
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    alignment_model, metadata = whisperx.load_align_model(
+        language_code=language, device=device
+    )
 
     for i, row in df.iterrows():
         text = row["text"].strip(".")
@@ -140,9 +150,9 @@ def run_segment_inference(
 
                 run_inference(
                     text=sentence,
+                    tts_model=tts_model,
                     output_filename=temp_name,
-                    output_folder=output_dir_name,
-                    model_name=model_name,
+                    output_dir=output_dir,
                     language=language,
                     speafer_ref=speaker_ref,
                 )
@@ -157,7 +167,7 @@ def run_segment_inference(
 
                 # Try trimming via WhisperX
                 last_word_end = align_last_word_timestamp(
-                    temp_path, sentence, language=language
+                    alignment_model, metadata, temp_path, sentence, language=language
                 )
                 if last_word_end:
                     aligned_audio = audio[: int(last_word_end * 1000)]
@@ -193,12 +203,6 @@ def run_segment_inference(
 
 @click.command()
 @click.option(
-    "--csv-path",
-    type=Path,
-    default=DATA_INFERENCE / "translated_segments.csv",
-    help="Path to translated CSV with start/end/timestamps.",
-)
-@click.option(
     "--model-name",
     type=str,
     default="production_latest",
@@ -216,16 +220,38 @@ def run_segment_inference(
     default="es",
     help="Target language code (e.g., 'es').",
 )
-def main(csv_path, model_name, speaker_ref, language):
+def main(model_name, speaker_ref, language):
     """Run XTTS inference with alignment-based cleanup and stitch audio with silence alignment."""
-    logger.info("Starting XTTS inference with WhisperX alignment...")
-    run_segment_inference(
-        csv_path=csv_path,
-        output_dir_name="tts_segments",
-        model_name=model_name,
-        speaker_ref=speaker_ref,
-        language=language,
+    # Initialize XTTS model
+    gpu = torch.cuda.is_available()
+    model_path = MODEL_OUTPUT_PATH / model_name
+
+    tts_model = TTS(
+        model_path=model_path,
+        config_path=model_path / "config.json",
+        progress_bar=True,
+        gpu=gpu,
     )
+
+    for inference_dir in DATA_INFERENCE.iterdir():
+        name = inference_dir.name
+
+        output_dir = DATA_INFERENCE / name / "tts_segments"
+        if output_dir.exists():
+            logger.info("Skipping %s — already translated", name)
+            continue
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = inference_dir / "translated_segments.csv"
+
+        logger.info("Starting XTTS inference with WhisperX alignment for %s", name)
+        run_segment_inference(
+            csv_path=csv_path,
+            tts_model=tts_model,
+            output_dir=output_dir,
+            speaker_ref=speaker_ref,
+            language=language,
+        )
 
 
 if __name__ == "__main__":
