@@ -9,6 +9,7 @@ arguments for flexible invocation.
 from datetime import datetime
 
 import click
+import torch
 from TTS.api import TTS
 
 from src.constants import DATA_INFERENCE, MODEL_OUTPUT_PATH
@@ -19,9 +20,9 @@ logger = get_logger(__file__)
 
 def run_inference(
     text: str,
+    tts_model: TTS,
     output_filename: str = "output",
     output_folder: str | None = None,
-    model_name: str = "production_latest",
     language: str = "es",
     speafer_ref: str = "ref_en",
 ) -> None:
@@ -30,15 +31,12 @@ def run_inference(
 
     Args:
         text (str): Input text to synthesize.
+        tts_model (TTS.api.TTS): TTS trained model.
         output_filename (str): Output WAV file name.
         output_folder (str): Output folder for inference under inference dir.
-        model_name (str): Name of the folder under MODEL_OUTPUT_PATH containing the model and
-            config.
         language (str): Target language for synthesis.
         speafer_ref (str): Name of the speaker reference wav.
     """
-    model_path = MODEL_OUTPUT_PATH / model_name
-    config_path = model_path / "config.json"
     speaker_wav = MODEL_OUTPUT_PATH / "speaker_references" / f"{speafer_ref}.wav"
 
     if not output_folder:
@@ -48,10 +46,7 @@ def run_inference(
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{output_filename}.wav"
 
-    tts = TTS(
-        model_path=model_path, config_path=config_path, progress_bar=True, gpu=False
-    )
-    tts.tts_to_file(
+    tts_model.tts_to_file(
         text=text,
         speaker_wav=speaker_wav,
         language=language,
@@ -81,7 +76,7 @@ def run_inference(
     help="Name of output folder under inference dir. Defaults to timestamp.",
 )
 @click.option(
-    "--model",
+    "--model-name",
     type=str,
     default="production_latest",
     help="Model folder name.",
@@ -98,13 +93,25 @@ def run_inference(
     default="ref_en",
     help="Speaker reference wav for inference.",
 )
-def main(text, output_filename, output_folder, model, language, speafer_ref):
+def main(text, output_filename, output_folder, model_name, language, speafer_ref):
     """Run inference with a fine-tuned XTTS model."""
+    # Initialize model
+    gpu = torch.cuda.is_available()
+    model_path = MODEL_OUTPUT_PATH / model_name
+
+    tts_model = TTS(
+        model_path=model_path,
+        config_path=model_path / "config.json",
+        progress_bar=True,
+        gpu=gpu,
+    )
+
+    # Run inference
     run_inference(
         text=text,
+        tts_model=tts_model,
         output_filename=output_filename,
         output_folder=output_folder,
-        model_name=model,
         language=language,
         speafer_ref=speafer_ref,
     )
