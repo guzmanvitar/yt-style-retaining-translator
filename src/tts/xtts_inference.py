@@ -7,6 +7,7 @@ arguments for flexible invocation.
 """
 
 from datetime import datetime
+from pathlib import Path
 
 import click
 import torch
@@ -22,7 +23,7 @@ def run_inference(
     text: str,
     tts_model: TTS,
     output_filename: str = "output",
-    output_folder: str | None = None,
+    output_dir: Path | None = None,
     language: str = "es",
     speafer_ref: str = "ref_en",
 ) -> None:
@@ -39,18 +40,17 @@ def run_inference(
     """
     speaker_wav = MODEL_OUTPUT_PATH / "speaker_references" / f"{speafer_ref}.wav"
 
-    if not output_folder:
-        output_folder = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    if not output_dir:
+        output_dir = DATA_INFERENCE / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    output_dir = DATA_INFERENCE / output_folder
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{output_filename}.wav"
 
     tts_model.tts_to_file(
         text=text,
-        speaker_wav=speaker_wav,
+        speaker_wav=str(speaker_wav),
         language=language,
-        file_path=output_path,
+        file_path=str(output_path),
     )
 
     logger.debug(f"Audio generated and saved to: {output_path}")
@@ -70,10 +70,10 @@ def run_inference(
     help="Output WAV file name.",
 )
 @click.option(
-    "--output-folder",
+    "--output-dir",
     type=str,
     default=None,
-    help="Name of output folder under inference dir. Defaults to timestamp.",
+    help="Output dir for inference. Defaults to DATA_INFERENCE / timestamp.",
 )
 @click.option(
     "--model-name",
@@ -93,7 +93,7 @@ def run_inference(
     default="ref_en",
     help="Speaker reference wav for inference.",
 )
-def main(text, output_filename, output_folder, model_name, language, speafer_ref):
+def main(text, output_filename, output_dir, model_name, language, speafer_ref):
     """Run inference with a fine-tuned XTTS model."""
     # Initialize model
     gpu = torch.cuda.is_available()
@@ -111,7 +111,7 @@ def main(text, output_filename, output_folder, model_name, language, speafer_ref
         text=text,
         tts_model=tts_model,
         output_filename=output_filename,
-        output_folder=output_folder,
+        output_dir=output_dir,
         language=language,
         speafer_ref=speafer_ref,
     )
