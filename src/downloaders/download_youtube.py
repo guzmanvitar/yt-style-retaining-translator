@@ -1,8 +1,9 @@
 """YouTube download script for training and inference audio/video extraction."""
 
-import argparse
 import subprocess
 from pathlib import Path
+
+import click
 
 from src.constants import DATA_RAW
 from src.logger_definition import get_logger
@@ -53,29 +54,20 @@ def download_video(url: str, output_dir: Path) -> None:
     subprocess.run(cmd, check=True)
 
 
-def main() -> None:
-    """Parse CLI arguments and download YouTube video(s) to video and audio folders."""
-    parser = argparse.ArgumentParser(
-        description="Download YouTube video(s) and extract WAV audio."
-    )
-    parser.add_argument(
-        "urls",
-        nargs="+",
-        help="YouTube video URLs to download.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=DATA_RAW,
-        help="Directory to save downloads (default: data/raw/).",
-    )
-
-    args = parser.parse_args()
-
-    for url in args.urls:
+@click.command()
+@click.argument("urls", nargs=-1, required=True)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    default=DATA_RAW,
+    help="Directory to save downloads (default: data/raw/).",
+)
+def main(urls: tuple[str], output_dir: Path) -> None:
+    """Download YouTube video(s) and extract WAV audio."""
+    for url in urls:
         try:
-            download_video(url, args.output_dir)
-            download_audio(url, args.output_dir)
+            download_video(url, output_dir)
+            download_audio(url, output_dir)
         except subprocess.CalledProcessError as e:
             logger.error("Download failed for %s: %s", url, e)
 
