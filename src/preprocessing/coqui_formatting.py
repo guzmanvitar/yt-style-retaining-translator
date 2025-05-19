@@ -43,7 +43,7 @@ def merge_coqui_csvs_and_audio(
         logger.info("Preparing Coqui dataset from directory: %s", audio_dir)
         output_wav_dir = DATA_COQUI / name / "wavs"
         if output_wav_dir.exists():
-            logger.info("Skipping %s — already segmented", name)
+            logger.info("Skipping %s — already processed", name)
             continue
 
         output_wav_dir.mkdir(parents=True, exist_ok=True)
