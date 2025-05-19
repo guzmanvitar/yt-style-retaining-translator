@@ -6,9 +6,9 @@ from input text in a target language and voice style. It supports command-line
 arguments for flexible invocation.
 """
 
-import argparse
 from datetime import datetime
 
+import click
 from TTS.api import TTS
 
 from src.constants import DATA_INFERENCE, MODEL_OUTPUT_PATH
@@ -61,44 +61,52 @@ def run_inference(
     logger.debug(f"Audio generated and saved to: {output_path}")
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Run inference with a fine-tuned XTTS model."
-    )
-    parser.add_argument("--text", type=str, required=True, help="Text to synthesize.")
-    parser.add_argument(
-        "--output_filename",
-        type=str,
-        default="xtts_output",
-        help="Output WAV file name.",
-    )
-    parser.add_argument(
-        "--output-folder",
-        type=str,
-        default=None,
-        help="Name of output folder under inference dir. Defaults to timestamp.",
-    )
-    parser.add_argument(
-        "--model", type=str, default="production_latest", help="Model folder name."
-    )
-    parser.add_argument(
-        "--language", type=str, default="es", help="Target language for output speech."
-    )
-    parser.add_argument(
-        "--speafer_ref",
-        type=str,
-        default="ref_en",
-        help="Speaker reference wav for inference.",
-    )
-    args = parser.parse_args()
-
+@click.command()
+@click.option(
+    "--text",
+    type=str,
+    required=True,
+    help="Text to synthesize.",
+)
+@click.option(
+    "--output-filename",
+    type=str,
+    default="xtts_output",
+    help="Output WAV file name.",
+)
+@click.option(
+    "--output-folder",
+    type=str,
+    default=None,
+    help="Name of output folder under inference dir. Defaults to timestamp.",
+)
+@click.option(
+    "--model",
+    type=str,
+    default="production_latest",
+    help="Model folder name.",
+)
+@click.option(
+    "--language",
+    type=str,
+    default="es",
+    help="Target language for output speech.",
+)
+@click.option(
+    "--speafer-ref",
+    type=str,
+    default="ref_en",
+    help="Speaker reference wav for inference.",
+)
+def main(text, output_filename, output_folder, model, language, speafer_ref):
+    """Run inference with a fine-tuned XTTS model."""
     run_inference(
-        args.text,
-        output_filename=args.output_filename,
-        output_folder=args.output_folder,
-        model_name=args.model,
-        language=args.language,
-        speafer_ref=args.speafer_ref,
+        text=text,
+        output_filename=output_filename,
+        output_folder=output_folder,
+        model_name=model,
+        language=language,
+        speafer_ref=speafer_ref,
     )
 
 
