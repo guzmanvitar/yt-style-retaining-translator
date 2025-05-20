@@ -66,7 +66,7 @@ def extract_translations(response: str) -> list[str]:
     ]
 
 
-def translate_segments(df: pd.DataFrame, batch_size: int = 80) -> pd.DataFrame:
+def translate_segments(df: pd.DataFrame, batch_size: int = 50) -> pd.DataFrame:
     """Translate a DataFrame of segments using the LLM in batches.
 
     Args:
