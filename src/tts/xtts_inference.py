@@ -22,10 +22,10 @@ logger = get_logger(__file__)
 def run_inference(
     text: str,
     tts_model: TTS,
+    speaker_ref_path: Path,
     output_filename: str = "output",
     output_dir: Path | None = None,
     language: str = "es",
-    speafer_ref: str = "ref_en",
 ) -> None:
     """
     Run XTTS inference and save audio to disk.
@@ -33,13 +33,11 @@ def run_inference(
     Args:
         text (str): Input text to synthesize.
         tts_model (TTS.api.TTS): TTS trained model.
+        speaker_ref_path (Path): Path of the speaker reference wav for inference.
         output_filename (str): Output WAV file name.
         output_folder (str): Output folder for inference under inference dir.
         language (str): Target language for synthesis.
-        speafer_ref (str): Name of the speaker reference wav.
     """
-    speaker_wav = MODEL_OUTPUT_PATH / "speaker_references" / f"{speafer_ref}.wav"
-
     if not output_dir:
         output_dir = DATA_INFERENCE / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
@@ -48,7 +46,7 @@ def run_inference(
 
     tts_model.tts_to_file(
         text=text,
-        speaker_wav=str(speaker_wav),
+        speaker_wav=str(speaker_ref_path),
         language=language,
         file_path=str(output_path),
     )
@@ -64,6 +62,12 @@ def run_inference(
     help="Text to synthesize.",
 )
 @click.option(
+    "--voice",
+    type=str,
+    required=True,
+    help="Pre trained speaker voice to use for inference",
+)
+@click.option(
     "--output-filename",
     type=str,
     default="xtts_output",
@@ -76,10 +80,10 @@ def run_inference(
     help="Output dir for inference. Defaults to DATA_INFERENCE / timestamp.",
 )
 @click.option(
-    "--model-name",
+    "--model-version",
     type=str,
     default="production_latest",
-    help="Model folder name.",
+    help="Model folder name under MODEL_OUTPUT_PATH.",
 )
 @click.option(
     "--language",
@@ -88,16 +92,21 @@ def run_inference(
     help="Target language for output speech.",
 )
 @click.option(
-    "--speafer-ref",
+    "--speaker-ref",
     type=str,
     default="ref_en",
     help="Speaker reference wav for inference.",
 )
-def main(text, output_filename, output_dir, model_name, language, speafer_ref):
+def main(
+    text, output_filename, output_dir, voice, model_version, language, speaker_ref
+):
     """Run inference with a fine-tuned XTTS model."""
     # Initialize model
     gpu = torch.cuda.is_available()
-    model_path = MODEL_OUTPUT_PATH / model_name
+    model_path = MODEL_OUTPUT_PATH / voice / model_version
+    speaker_ref_path = (
+        MODEL_OUTPUT_PATH / voice / "speaker_references" / f"{speaker_ref}.wav"
+    )
 
     tts_model = TTS(
         model_path=model_path,
@@ -110,10 +119,10 @@ def main(text, output_filename, output_dir, model_name, language, speafer_ref):
     run_inference(
         text=text,
         tts_model=tts_model,
+        speaker_ref_path=speaker_ref_path,
         output_filename=output_filename,
         output_dir=output_dir,
         language=language,
-        speafer_ref=speafer_ref,
     )
 
 

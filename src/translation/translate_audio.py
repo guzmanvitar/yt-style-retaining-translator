@@ -88,8 +88,8 @@ def align_last_word_timestamp(
 def run_segment_inference(
     csv_path: Path,
     tts_model: TTS,
+    speaker_ref_path: Path,
     output_dir: Path,
-    speaker_ref: str = "ref_en",
     language: str = "es",
     sentence_buffer_sec: float = 0.5,
     n_variants_per_sentence: int = 2,
@@ -110,8 +110,8 @@ def run_segment_inference(
     Args:
         csv_path (Path): CSV file with 'text', 'start', 'end' fields.
         tts_model (TTS.api.TTS): TTS trained model.
+        speaker_ref_path (Path): Path of the speaker reference wav for inference.
         output_dir (str): Output saving dir.
-        speaker_ref (str): Speaker reference filename (without extension).
         language (str): Target language code (e.g., 'es').
         sentence_buffer_sec (float): Silence in seconds between joined sentence clips.
         n_variants_per_sentence (int): Number of XTTS generations per sentence (default: 2).
@@ -151,10 +151,10 @@ def run_segment_inference(
                 run_inference(
                     text=sentence,
                     tts_model=tts_model,
+                    speaker_ref_path=speaker_ref_path,
                     output_filename=temp_name,
                     output_dir=output_dir,
                     language=language,
-                    speafer_ref=speaker_ref,
                 )
 
                 audio = AudioSegment.from_wav(temp_path).set_channels(1)
@@ -203,7 +203,13 @@ def run_segment_inference(
 
 @click.command()
 @click.option(
-    "--model-name",
+    "--voice",
+    type=str,
+    required=True,
+    help="Pre trained speaker voice to use for inference",
+)
+@click.option(
+    "--model-version",
     type=str,
     default="production_latest",
     help="Model folder name under MODEL_OUTPUT_PATH.",
@@ -220,11 +226,14 @@ def run_segment_inference(
     default="es",
     help="Target language code (e.g., 'es').",
 )
-def main(model_name, speaker_ref, language):
+def main(voice, model_version, speaker_ref, language):
     """Run XTTS inference with alignment-based cleanup and stitch audio with silence alignment."""
     # Initialize XTTS model
     gpu = torch.cuda.is_available()
-    model_path = MODEL_OUTPUT_PATH / model_name
+    model_path = MODEL_OUTPUT_PATH / voice / model_version
+    speaker_ref_path = (
+        MODEL_OUTPUT_PATH / voice / "speaker_references" / f"{speaker_ref}.wav"
+    )
 
     tts_model = TTS(
         model_path=model_path,
@@ -249,7 +258,7 @@ def main(model_name, speaker_ref, language):
             csv_path=csv_path,
             tts_model=tts_model,
             output_dir=output_dir,
-            speaker_ref=speaker_ref,
+            speaker_ref_path=speaker_ref_path,
             language=language,
         )
 
