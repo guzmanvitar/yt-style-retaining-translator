@@ -54,6 +54,11 @@ def main(sample_rates):
     for wav_path in wav_files:
         for sr in sample_rates:
             output_dir = DATA_PROCESSED / wav_path.stem / f"{sr}hz"
+            if output_dir.exists():
+                logger.info(
+                    "Skipping %s — already processed", f"{wav_path.stem} - {sr}hz"
+                )
+                continue
             output_dir.mkdir(parents=True, exist_ok=True)
             convert_audio(wav_path, output_dir, sr)
 
