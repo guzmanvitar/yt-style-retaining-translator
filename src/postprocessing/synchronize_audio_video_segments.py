@@ -325,7 +325,7 @@ def main(
 ):
     for inference_dir in DATA_INFERENCE.iterdir():
         name = inference_dir.name
-        output_path = DATA_FINAL / f"{name}.wav"
+        output_path = DATA_FINAL / f"{name}.mp4"
 
         if output_path.exists():
             logger.info("Skipping %s — already processed", name)
