@@ -246,10 +246,6 @@ def main(voice, model_version, speaker_ref, language):
         name = inference_dir.name
 
         output_dir = DATA_INFERENCE / name / "tts_segments"
-        if output_dir.exists():
-            logger.info("Skipping %s — already translated", name)
-            continue
-
         output_dir.mkdir(parents=True, exist_ok=True)
         csv_path = inference_dir / "translated_segments.csv"
 
