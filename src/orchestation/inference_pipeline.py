@@ -68,7 +68,7 @@ def run_script(
 
 
 @flow
-def video_translation_pipeline(urls: list[str]):
+def video_translation_pipeline(urls: list[str], voice: str):
     run_script(
         "src.downloaders.download_youtube",
         args=urls,
@@ -76,14 +76,26 @@ def video_translation_pipeline(urls: list[str]):
     run_script("src.preprocessing.convert_audio")
     run_script("src.preprocessing.segment_audio")
     run_script("src.translation.translate_transcription")
-    run_script("src.translation.translate_audio")
+    run_script(
+        "src.translation.translate_audio",
+        args=[
+            "--voice",
+            voice,
+        ],
+    )
     run_script("src.postprocessing.synchronize_audio_video_segments")
 
 
 @click.command()
 @click.argument("urls", nargs=-1, required=True)
-def main(urls: tuple[str]):
-    video_translation_pipeline(urls=list(urls))
+@click.option(
+    "--voice",
+    type=str,
+    required=True,
+    help="Pre trained speaker voice to use for inference",
+)
+def main(urls: tuple[str], voice):
+    video_translation_pipeline(urls=list(urls), voice=voice)
 
 
 if __name__ == "__main__":
