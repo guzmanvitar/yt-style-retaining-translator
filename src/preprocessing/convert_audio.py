@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 from pydub import AudioSegment
 
-from src.constants import DATA_PROCESSED, DATA_RAW
+from src.constants import DATA_FINAL, DATA_PROCESSED, DATA_RAW
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -52,13 +52,18 @@ def main(sample_rates):
         return
 
     for wav_path in wav_files:
+        name = wav_path.stem
+        final_path = DATA_FINAL / f"{name}.mp4"
+        if final_path.exists():
+            logger.info("Skipping %s — Processed video found in %s", name, DATA_FINAL)
+            continue
+
         for sr in sample_rates:
-            output_dir = DATA_PROCESSED / wav_path.stem / f"{sr}hz"
+            output_dir = DATA_PROCESSED / name / f"{sr}hz"
             if output_dir.exists():
-                logger.info(
-                    "Skipping %s — already processed", f"{wav_path.stem} - {sr}hz"
-                )
+                logger.info("Skipping %s — already processed", f"{name} - {sr}hz")
                 continue
+
             output_dir.mkdir(parents=True, exist_ok=True)
             convert_audio(wav_path, output_dir, sr)
 

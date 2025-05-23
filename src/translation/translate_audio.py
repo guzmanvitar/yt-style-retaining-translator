@@ -17,7 +17,7 @@ import whisperx
 from pydub import AudioSegment
 from TTS.api import TTS
 
-from src.constants import DATA_INFERENCE, MODEL_OUTPUT_PATH
+from src.constants import DATA_FINAL, DATA_INFERENCE, MODEL_OUTPUT_PATH
 from src.logger_definition import get_logger
 from src.tts.xtts_inference import run_inference
 
@@ -244,6 +244,11 @@ def main(voice, model_version, speaker_ref, language):
 
     for inference_dir in DATA_INFERENCE.iterdir():
         name = inference_dir.name
+
+        final_path = DATA_FINAL / f"{name}.mp4"
+        if final_path.exists():
+            logger.info("Skipping %s — Processed video found in %s", name, DATA_FINAL)
+            continue
 
         output_dir = DATA_INFERENCE / name / "tts_segments"
         output_dir.mkdir(parents=True, exist_ok=True)

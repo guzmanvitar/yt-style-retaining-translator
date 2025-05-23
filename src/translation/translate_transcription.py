@@ -14,7 +14,7 @@ from pathlib import Path
 import click
 import pandas as pd
 
-from src.constants import DATA_INFERENCE, DATA_PROCESSED
+from src.constants import DATA_FINAL, DATA_INFERENCE, DATA_PROCESSED
 from src.logger_definition import get_logger
 from src.translation.llm_service.services import LLMServiceFactory
 
@@ -104,6 +104,11 @@ def main():
     """Translate all segment CSVs and output a combined translated CSV."""
     for audio_dir in DATA_PROCESSED.iterdir():
         name = audio_dir.name
+
+        final_path = DATA_FINAL / f"{name}.mp4"
+        if final_path.exists():
+            logger.info("Skipping %s — Processed video found in %s", name, DATA_FINAL)
+            continue
 
         input_dir = audio_dir / "segments"
         output_path = DATA_INFERENCE / name / "translated_segments.csv"

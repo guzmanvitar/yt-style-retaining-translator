@@ -83,7 +83,13 @@ def video_translation_pipeline(urls: list[str], voice: str):
             voice,
         ],
     )
-    run_script("src.postprocessing.synchronize_audio_video_segments")
+    run_script(
+        "src.postprocessing.synchronize_audio_video_segments",
+        args=[
+            "--merge",
+            "--cleanup",
+        ],
+    )
 
 
 @click.command()

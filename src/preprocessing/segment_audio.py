@@ -11,7 +11,7 @@ import torchaudio
 import whisperx
 from pydub import AudioSegment, silence
 
-from src.constants import DATA_PROCESSED
+from src.constants import DATA_FINAL, DATA_PROCESSED
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -102,7 +102,7 @@ def chunk_aligned_audio_versions(
 
 def transcribe_and_align(
     audio_path: Path,
-    transcription_model: whisperx.asr.FasterWhisperPipeline,
+    transcription_model,
     alignment_model: torchaudio.models.wav2vec2.model.Wav2Vec2Model,
     alignment_metadata: dict,
     language: str = "en",
@@ -198,7 +198,7 @@ def segment_audio(
     segments: list[dict[str, Any]],
     chunks_dir: Path,
     csv_path: Path,
-    transcription_model: whisperx.asr.FasterWhisperPipeline,
+    transcription_model,
     alignment_model: torchaudio.models.wav2vec2.model.Wav2Vec2Model,
     alignment_metadata: dict,
     global_offset: float = 0.0,
@@ -336,6 +336,12 @@ def main(model_size: str, language: str) -> None:
             continue
 
         name = audio_dir.name
+
+        final_path = DATA_FINAL / f"{name}.mp4"
+        if final_path.exists():
+            logger.info("Skipping %s — Processed video found in %s", name, DATA_FINAL)
+            continue
+
         path_16k = audio_dir / "16000hz"
         path_22k = audio_dir / "22050hz"
 
