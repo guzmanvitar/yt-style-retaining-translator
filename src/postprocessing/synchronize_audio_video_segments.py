@@ -102,7 +102,7 @@ def align_and_export_segments(
     segment_dir: Path,
     csv_path: Path,
     video_dir: Path,
-    video_name: str | None,
+    video_name: str,
     output_dir: Path,
     max_acceleration: float,
     buffer_silence_sec: float,
@@ -124,7 +124,7 @@ def align_and_export_segments(
         segment_dir (Path): Directory containing TTS audio segments (e.g., segment_0001.wav).
         csv_path (Path): Path to CSV with segment timing metadata ('start', 'end').
         video_dir (Path): Directory containing the source video.
-        video_name (str | None): Name of the original video file, or None to auto-detect first .mp4.
+        video_name (str): Name of the original video file.
         output_dir (Path): Directory to save aligned segment outputs.
         max_acceleration (float): Maximum allowed acceleration factor for audio fitting
             (e.g., 1.2 = 20% faster).
@@ -135,13 +135,9 @@ def align_and_export_segments(
     df["end"] = df["end"].astype(float)
 
     if video_name:
-        video_path = video_dir / video_name
+        video_path = video_dir / f"{video_name}.mp4"
         if not video_path.exists():
             raise FileNotFoundError(f"Video file not found: {video_path}")
-    else:
-        video_path = next(video_dir.glob("*.mp4"), None)
-        if not video_path:
-            raise FileNotFoundError("No .mp4 video found in the directory.")
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -282,7 +278,7 @@ def concat_and_merge(output_dir: Path, cleanup: bool = True):
     subprocess.run(cmd_concat, check=True)
 
     final_audio = output_dir / "final_audio.wav"
-    final_video = DATA_FINAL / "final_video.mp4"
+    final_video = DATA_FINAL / f"{output_dir.name}.mp4"
     cmd_merge = [
         "ffmpeg",
         "-y",
@@ -309,17 +305,6 @@ def concat_and_merge(output_dir: Path, cleanup: bool = True):
 
 
 @click.command()
-@click.option("--segment-dir", type=Path, default=DATA_INFERENCE / "tts_segments")
-@click.option(
-    "--csv-path", type=Path, default=DATA_INFERENCE / "translated_segments.csv"
-)
-@click.option(
-    "--video-dir",
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
-    default=DATA_RAW / "videos",
-)
-@click.option("--video-name", type=str, default=None)
-@click.option("--output-dir", type=Path, default=DATA_FINAL / "aligned_segments")
 @click.option("--max-acceleration", type=float, default=1.15)
 @click.option("--buffer", "buffer_silence_sec", type=float, default=0.25)
 @click.option(
@@ -333,28 +318,36 @@ def concat_and_merge(output_dir: Path, cleanup: bool = True):
     help="Delete aligned segment files after merging (default: True).",
 )
 def main(
-    segment_dir,
-    csv_path,
-    video_dir,
-    video_name,
-    output_dir,
     max_acceleration,
     buffer_silence_sec,
     merge,
     cleanup,
 ):
-    align_and_export_segments(
-        segment_dir=segment_dir,
-        csv_path=csv_path,
-        video_dir=video_dir,
-        video_name=video_name,
-        output_dir=output_dir,
-        max_acceleration=max_acceleration,
-        buffer_silence_sec=buffer_silence_sec,
-    )
+    for inference_dir in DATA_INFERENCE.iterdir():
+        name = inference_dir.name
+        output_path = DATA_FINAL / f"{name}.mp4"
 
-    if merge:
-        concat_and_merge(output_dir, cleanup=cleanup)
+        if output_path.exists():
+            logger.info("Skipping %s — already processed", name)
+            continue
+
+        segment_dir = inference_dir / "tts_segments"
+        csv_path = inference_dir / "translated_segments.csv"
+        output_dir = DATA_FINAL / name
+        video_dir = DATA_RAW / "videos"
+
+        align_and_export_segments(
+            segment_dir=segment_dir,
+            csv_path=csv_path,
+            video_dir=video_dir,
+            video_name=name,
+            output_dir=output_dir,
+            max_acceleration=max_acceleration,
+            buffer_silence_sec=buffer_silence_sec,
+        )
+
+        if merge:
+            concat_and_merge(output_dir, cleanup=cleanup)
 
 
 if __name__ == "__main__":

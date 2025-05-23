@@ -1,10 +1,9 @@
 """Convert segmented audio and transcription files into a Coqui TTS training dataset."""
 
-import argparse
 import csv
-from pathlib import Path
 from shutil import copy2
 
+import click
 from pydub import AudioSegment
 
 from src.constants import DATA_COQUI, DATA_PROCESSED
@@ -13,10 +12,20 @@ from src.logger_definition import get_logger
 logger = get_logger(__file__)
 
 
+@click.command()
+@click.option(
+    "--min-duration-ms",
+    type=int,
+    default=1000,
+    help="Minimum segment duration to include in miliseconds.",
+)
+@click.option(
+    "--max-duration-ms",
+    type=int,
+    default=11000,
+    help="Maximum segment duration to include in miliseconds.",
+)
 def merge_coqui_csvs_and_audio(
-    segments_dir: Path,
-    chunks_dir: Path,
-    output_dir: Path,
     min_duration_ms: int = 1000,
     max_duration_ms: int = 11000,
 ) -> None:
@@ -25,77 +34,57 @@ def merge_coqui_csvs_and_audio(
     into a Coqui-compatible training dataset, filtering by audio duration.
 
     Args:
-        segments_dir (Path): Directory containing multiple CSVs with segment data.
-        chunks_dir (Path): Directory containing all the audio chunk .wav files.
-        output_dir (Path): Output directory where `wavs/` and `metadata.csv` will be written.
         min_duration_ms (int): Minimum segment duration to include.
         max_duration_ms (int): Maximum segment duration to include.
     """
-    logger.info("Preparing Coqui dataset from directory: %s", segments_dir)
-    output_wav_dir = output_dir / "wavs"
-    output_wav_dir.mkdir(parents=True, exist_ok=True)
-    metadata_path = output_dir / "metadata.csv"
+    for audio_dir in DATA_PROCESSED.iterdir():
+        name = audio_dir.name
 
-    rows_written = 0
-    with open(metadata_path, "w", newline="", encoding="utf-8") as outfile:
-        writer = csv.writer(outfile, delimiter="|")
+        logger.info("Preparing Coqui dataset from directory: %s", audio_dir)
+        output_wav_dir = DATA_COQUI / name / "wavs"
+        if output_wav_dir.exists():
+            logger.info("Skipping %s — already processed", name)
+            continue
 
-        for csv_file in sorted(segments_dir.glob("*.csv")):
-            logger.info("Processing CSV: %s", csv_file.name)
-            with open(csv_file, newline="", encoding="utf-8") as infile:
-                reader = csv.DictReader(infile)
-                for row in reader:
-                    filename = row["filename"]
-                    text = row["text"].strip()
-                    source_file = chunks_dir / filename
-                    target_file = output_wav_dir / filename
+        output_wav_dir.mkdir(parents=True, exist_ok=True)
+        metadata_path = DATA_COQUI / name / "metadata.csv"
 
-                    if not source_file.exists():
-                        logger.warning("Missing file: %s", source_file)
-                        continue
+        rows_written = 0
+        with open(metadata_path, "w", newline="", encoding="utf-8") as outfile:
+            writer = csv.writer(outfile, delimiter="|")
+            segments_dir = DATA_PROCESSED / name / "segments"
+            chunks_dir = segments_dir / "chunks"
 
-                    duration_ms = len(AudioSegment.from_file(source_file))
-                    if duration_ms < min_duration_ms or duration_ms > max_duration_ms:
-                        logger.debug(
-                            "Skipping %s (duration: %d ms)", filename, duration_ms
-                        )
-                        continue
+            for csv_file in sorted(segments_dir.glob("*.csv")):
+                logger.info("Processing CSV: %s", csv_file.name)
+                with open(csv_file, newline="", encoding="utf-8") as infile:
+                    reader = csv.DictReader(infile)
+                    for row in reader:
+                        filename = row["filename"]
+                        text = row["text"].strip()
+                        source_file = chunks_dir / filename
+                        target_file = output_wav_dir / filename
 
-                    copy2(source_file, target_file)
-                    writer.writerow([filename.removesuffix(".wav"), text, text])
-                    rows_written += 1
+                        if not source_file.exists():
+                            logger.warning("Missing file: %s", source_file)
+                            continue
 
-    logger.info("Wrote %d samples to %s", rows_written, metadata_path)
+                        duration_ms = len(AudioSegment.from_file(source_file))
+                        if (
+                            duration_ms < min_duration_ms
+                            or duration_ms > max_duration_ms
+                        ):
+                            logger.debug(
+                                "Skipping %s (duration: %d ms)", filename, duration_ms
+                            )
+                            continue
 
+                        copy2(source_file, target_file)
+                        writer.writerow([filename.removesuffix(".wav"), text, text])
+                        rows_written += 1
 
-def main() -> None:
-    """Run Coqui dataset preparation by merging all segmented CSVs in a directory."""
-    parser = argparse.ArgumentParser(
-        description="Prepare full dataset for Coqui TTS training."
-    )
-    parser.add_argument(
-        "--segments-dir",
-        type=Path,
-        default=DATA_PROCESSED / "segments",
-        help="Directory containing segmented CSV files (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--chunks-dir",
-        type=Path,
-        default=DATA_PROCESSED / "segments" / "chunks",
-        help="Directory containing audio chunk files (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=DATA_COQUI,
-        help="Output directory for prepared dataset (default: %(default)s)",
-    )
-
-    args = parser.parse_args()
-
-    merge_coqui_csvs_and_audio(args.segments_dir, args.chunks_dir, args.output_dir)
+        logger.info("Wrote %d samples to %s", rows_written, metadata_path)
 
 
 if __name__ == "__main__":
-    main()
+    merge_coqui_csvs_and_audio()

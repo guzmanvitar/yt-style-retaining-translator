@@ -1,15 +1,17 @@
 """Transcribe and segment WAV audio into aligned chunks using the WhisperX Python API."""
 
-import argparse
+import shutil
 from pathlib import Path
-from typing import Any, List
+from typing import Any
 
+import click
 import pandas as pd
 import torch
+import torchaudio
 import whisperx
 from pydub import AudioSegment, silence
 
-from src.constants import DATA_PROCESSED
+from src.constants import DATA_FINAL, DATA_PROCESSED
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -99,29 +101,33 @@ def chunk_aligned_audio_versions(
 
 
 def transcribe_and_align(
-    audio_path: Path, model_size: str = "large-v3", language: str = "en"
+    audio_path: Path,
+    transcription_model,
+    alignment_model: torchaudio.models.wav2vec2.model.Wav2Vec2Model,
+    alignment_metadata: dict,
+    language: str = "en",
 ) -> list[dict[str, Any]]:
     """
     Transcribe and align a WAV audio file using WhisperX.
 
     Args:
         audio_path (Path): Path to input WAV file.
-        model_size (str): Whisper model name (e.g., "base", "large-v3").
+        model (whisperx.asr.FasterWhisperPipeline): Instantiated Whisper transcription model.
+        alignment_model (torchaudio.models.wav2vec2.model.Wav2Vec2Model): Instantiated Whisper
+            alignment model.
+        alignment_metadata (dict): Metadata for alignment model.
         language (str): Language code to force (default: "en").
 
     Returns:
         list[dict[str, Any]]: List of segment dictionaries with start, end, and text.
     """
-    device = "cuda" if torch.cuda.is_available() else "cpu"
     logger.info("Transcribing %s with language=%s...", audio_path.name, language)
-
-    model = whisperx.load_model(model_size, device, compute_type="int8")
-    result = model.transcribe(str(audio_path), language=language)
+    result = transcription_model.transcribe(str(audio_path), language=language)
 
     logger.info("Aligning timestamps...")
-    model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     result_aligned = whisperx.align(
-        result["segments"], model_a, metadata, str(audio_path), device
+        result["segments"], alignment_model, alignment_metadata, str(audio_path), device
     )
 
     return result_aligned["segments"]
@@ -134,8 +140,7 @@ def split_segment_on_silence(
     max_duration: float = 15.0,
     min_silence_len: int = 300,
     silence_thresh: int = -40,
-    keep_silence: int = 150,
-) -> List[tuple[float, float]]:
+) -> list[tuple[float, float]]:
     """
     Recursively split a long audio segment into shorter ones using silence detection.
 
@@ -150,7 +155,6 @@ def split_segment_on_silence(
         max_duration (float): Maximum allowed duration of a subsegment in seconds.
         min_silence_len (int): Minimum silence length in milliseconds to consider a split point.
         silence_thresh (int): Silence threshold in dBFS.
-        keep_silence (int): Not used in current logic, included for future compatibility.
 
     Returns:
         List[tuple[float, float]]: List of (start, end) pairs for each subsegment in seconds.
@@ -194,8 +198,11 @@ def segment_audio(
     segments: list[dict[str, Any]],
     chunks_dir: Path,
     csv_path: Path,
+    transcription_model,
+    alignment_model: torchaudio.models.wav2vec2.model.Wav2Vec2Model,
+    alignment_metadata: dict,
     global_offset: float = 0.0,
-    model_size: str = "large-v3",
+    language: str = "en",
 ) -> None:
     """
     Segment and align audio into smaller clips, with re-alignment for long segments.
@@ -209,8 +216,13 @@ def segment_audio(
         segments (list[dict]): List of dictionaries with 'start', 'end', and 'text' fields.
         chunks_dir (Path): Directory where output audio chunks will be saved.
         csv_path (Path): Path to save the resulting segment metadata CSV.
-        global_offset (float): Time offset (in seconds) to apply to all timestamps.
         model_size (str): Whisper model size for re-alignment (default: "large-v3").
+        model (whisperx.asr.FasterWhisperPipeline): Instantiated Whisper transcription model.
+        alignment_model (torchaudio.models.wav2vec2.model.Wav2Vec2Model): Instantiated Whisper
+            alignment model.
+        alignment_metadata (dict): Metadata for alignment model.
+        global_offset (float): Time offset (in seconds) to apply to all timestamps.
+        language (str): Language for transcription.
     """
     audio = AudioSegment.from_wav(audio_path)
     chunks_dir.mkdir(parents=True, exist_ok=True)
@@ -248,7 +260,13 @@ def segment_audio(
                     temp_path, format="wav"
                 )
 
-                sub_segments = transcribe_and_align(temp_path, model_size=model_size)
+                sub_segments = transcribe_and_align(
+                    temp_path,
+                    transcription_model=transcription_model,
+                    alignment_model=alignment_model,
+                    alignment_metadata=alignment_metadata,
+                    language=language,
+                )
                 text = " ".join(
                     s["text"]
                     for s in sub_segments
@@ -290,56 +308,116 @@ def segment_audio(
             logger.warning(f"Failed to delete temp file {f}: {e}")
 
 
-def main() -> None:
+@click.command()
+@click.option(
+    "--model-size",
+    type=str,
+    default="large-v3",
+    help="Whisper model to use for transcription (default: large-v3).",
+)
+@click.option(
+    "--language",
+    type=str,
+    default="en",
+    help="Language for Whisper transcription.",
+)
+def main(model_size: str, language: str) -> None:
     """
-    Orchestrate audio chunking, transcription, segmentation, and re-alignment.
-
-    This function processes 16kHz and 22kHz aligned audio pairs:
-    - Chunks the audio based on silence in the 22kHz version.
-    - Transcribes and aligns each 16kHz chunk using WhisperX.
-    - Segments the aligned transcription into individual audio clips.
-    - Splits long segments, re-aligns them, and saves clean output with metadata.
-
-    Command-line Args:
-        --model (str): Whisper model to use for transcription (default: "large-v3").
-        --output-dir (Path): Directory to store segmented chunks and CSVs.
+    Iterate over all processed audio folders and run segmentation on each one.
     """
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="large-v3")
-    parser.add_argument("--output-dir", type=Path, default=DATA_PROCESSED / "segments")
-    args = parser.parse_args()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    transcription_model = whisperx.load_model(model_size, device, compute_type="int8")
+    alignment_model, metadata = whisperx.load_align_model(
+        language_code=language, device=device
+    )
 
-    input_dir = DATA_PROCESSED / "16000hz"
-    segment_source_dir = DATA_PROCESSED / "22050hz"
-    temp_base = Path("tmp/segments")
-    temp_16k = temp_base / "16k"
-    temp_22k = temp_base / "22k"
-
-    for audio_path in input_dir.glob("*.wav"):
-        base_name = audio_path.stem.replace("_16000", "")
-        segment_path = segment_source_dir / f"{base_name}_22050.wav"
-        if not segment_path.exists():
-            logger.warning("Missing 22050Hz audio for %s", base_name)
+    for audio_dir in DATA_PROCESSED.iterdir():
+        if not audio_dir.is_dir():
             continue
 
+        name = audio_dir.name
+
+        final_path = DATA_FINAL / f"{name}.mp4"
+        if final_path.exists():
+            logger.info("Skipping %s — Processed video found in %s", name, DATA_FINAL)
+            continue
+
+        path_16k = audio_dir / "16000hz"
+        path_22k = audio_dir / "22050hz"
+
+        if not path_16k.exists() or not path_22k.exists():
+            logger.warning("Skipping %s: Missing 16000hz or 22050hz folder", name)
+            continue
+
+        audio_16k = path_16k / f"{name}_16000.wav"
+        audio_22k = path_22k / f"{name}_22050.wav"
+
+        if not audio_16k.exists() or not audio_22k.exists():
+            logger.warning("Skipping %s: Expected audio files not found", name)
+            continue
+
+        output_dir = audio_dir / "segments"
+        chunk_dir = output_dir / "chunks"
+        temp_base = audio_dir / "tmp"
+        temp_16k = temp_base / "16k"
+        temp_22k = temp_base / "22k"
+
+        # Checkpoint logic
+        if output_dir.exists() and not temp_base.exists():
+            logger.info("Skipping %s — already segmented", name)
+            continue
+
+        # Clean output if it exists
+        if output_dir.exists():
+            logger.info("Cleaning existing segments for %s", name)
+            for f in output_dir.glob("**/*"):
+                try:
+                    f.unlink()
+                except IsADirectoryError:
+                    for subf in f.glob("*"):
+                        subf.unlink()
+                    f.rmdir()
+            output_dir.rmdir()
+
+        output_dir.mkdir(parents=True)
+        chunk_dir.mkdir(parents=True, exist_ok=True)
+        temp_16k.mkdir(parents=True, exist_ok=True)
+        temp_22k.mkdir(parents=True, exist_ok=True)
+
+        logger.info("Processing %s", name)
+
         chunk_groups, chunk_offsets = chunk_aligned_audio_versions(
-            [audio_path, segment_path],
+            [audio_16k, audio_22k],
             reference_index=1,
             output_dirs=[temp_16k, temp_22k],
-            base_filename=base_name,
+            base_filename=name,
         )
 
-        for (chunk_16k, chunk_22k), offset in zip(chunk_groups, chunk_offsets):
-            segments = transcribe_and_align(chunk_16k, model_size=args.model)
-            csv_path = args.output_dir / f"{chunk_22k.stem}_segments.csv"
+        for i, ((chunk_16k, chunk_22k), offset) in enumerate(
+            zip(chunk_groups, chunk_offsets)
+        ):
+            csv_path = output_dir / f"{chunk_22k.stem}_segments.csv"
+            segments = transcribe_and_align(
+                chunk_16k,
+                transcription_model=transcription_model,
+                alignment_model=alignment_model,
+                alignment_metadata=metadata,
+                language=language,
+            )
             segment_audio(
                 chunk_22k,
                 segments,
-                args.output_dir / "chunks",
+                chunk_dir,
                 csv_path,
+                transcription_model=transcription_model,
+                alignment_model=alignment_model,
+                alignment_metadata=metadata,
                 global_offset=offset,
-                model_size=args.model,
+                language=language,
             )
+
+        # If processing successful remove tmp dir
+        shutil.rmtree(temp_base)
 
 
 if __name__ == "__main__":

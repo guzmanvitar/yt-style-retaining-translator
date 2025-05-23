@@ -14,7 +14,7 @@ from pathlib import Path
 import click
 import pandas as pd
 
-from src.constants import DATA_INFERENCE, DATA_PROCESSED
+from src.constants import DATA_FINAL, DATA_INFERENCE, DATA_PROCESSED
 from src.logger_definition import get_logger
 from src.translation.llm_service.services import LLMServiceFactory
 
@@ -66,7 +66,7 @@ def extract_translations(response: str) -> list[str]:
     ]
 
 
-def translate_segments(df: pd.DataFrame, batch_size: int = 80) -> pd.DataFrame:
+def translate_segments(df: pd.DataFrame, batch_size: int = 50) -> pd.DataFrame:
     """Translate a DataFrame of segments using the LLM in batches.
 
     Args:
@@ -102,15 +102,28 @@ def translate_segments(df: pd.DataFrame, batch_size: int = 80) -> pd.DataFrame:
 @click.command()
 def main():
     """Translate all segment CSVs and output a combined translated CSV."""
-    input_dir = DATA_PROCESSED / "segments"
-    output_path = DATA_INFERENCE / "translated_segments.csv"
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    for audio_dir in DATA_PROCESSED.iterdir():
+        name = audio_dir.name
 
-    df = load_segment_csvs(input_dir)
-    translated_df = translate_segments(df)
-    translated_df.to_csv(output_path, index=False)
+        final_path = DATA_FINAL / f"{name}.mp4"
+        if final_path.exists():
+            logger.info("Skipping %s — Processed video found in %s", name, DATA_FINAL)
+            continue
 
-    logger.info(f"Translated segments written to: {output_path}")
+        input_dir = audio_dir / "segments"
+        output_path = DATA_INFERENCE / name / "translated_segments.csv"
+
+        if output_path.exists():
+            logger.info("Skipping %s — already translated", name)
+            continue
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        df = load_segment_csvs(input_dir)
+        translated_df = translate_segments(df)
+        translated_df.to_csv(output_path, index=False)
+
+        logger.info(f"Translated segments written to: {output_path}")
 
 
 if __name__ == "__main__":

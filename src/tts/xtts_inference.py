@@ -6,9 +6,11 @@ from input text in a target language and voice style. It supports command-line
 arguments for flexible invocation.
 """
 
-import argparse
 from datetime import datetime
+from pathlib import Path
 
+import click
+import torch
 from TTS.api import TTS
 
 from src.constants import DATA_INFERENCE, MODEL_OUTPUT_PATH
@@ -19,86 +21,108 @@ logger = get_logger(__file__)
 
 def run_inference(
     text: str,
+    tts_model: TTS,
+    speaker_ref_path: Path,
     output_filename: str = "output",
-    output_folder: str | None = None,
-    model_name: str = "production_latest",
+    output_dir: Path | None = None,
     language: str = "es",
-    speafer_ref: str = "ref_en",
 ) -> None:
     """
     Run XTTS inference and save audio to disk.
 
     Args:
         text (str): Input text to synthesize.
+        tts_model (TTS.api.TTS): TTS trained model.
+        speaker_ref_path (Path): Path of the speaker reference wav for inference.
         output_filename (str): Output WAV file name.
         output_folder (str): Output folder for inference under inference dir.
-        model_name (str): Name of the folder under MODEL_OUTPUT_PATH containing the model and
-            config.
         language (str): Target language for synthesis.
-        speafer_ref (str): Name of the speaker reference wav.
     """
-    model_path = MODEL_OUTPUT_PATH / model_name
-    config_path = model_path / "config.json"
-    speaker_wav = MODEL_OUTPUT_PATH / "speaker_references" / f"{speafer_ref}.wav"
+    if not output_dir:
+        output_dir = DATA_INFERENCE / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    if not output_folder:
-        output_folder = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-    output_dir = DATA_INFERENCE / output_folder
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{output_filename}.wav"
 
-    tts = TTS(
-        model_path=model_path, config_path=config_path, progress_bar=True, gpu=False
-    )
-    tts.tts_to_file(
+    tts_model.tts_to_file(
         text=text,
-        speaker_wav=speaker_wav,
+        speaker_wav=str(speaker_ref_path),
         language=language,
-        file_path=output_path,
+        file_path=str(output_path),
     )
 
     logger.debug(f"Audio generated and saved to: {output_path}")
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Run inference with a fine-tuned XTTS model."
+@click.command()
+@click.option(
+    "--text",
+    type=str,
+    required=True,
+    help="Text to synthesize.",
+)
+@click.option(
+    "--voice",
+    type=str,
+    required=True,
+    help="Pre trained speaker voice to use for inference",
+)
+@click.option(
+    "--output-filename",
+    type=str,
+    default="xtts_output",
+    help="Output WAV file name.",
+)
+@click.option(
+    "--output-dir",
+    type=str,
+    default=None,
+    help="Output dir for inference. Defaults to DATA_INFERENCE / timestamp.",
+)
+@click.option(
+    "--model-version",
+    type=str,
+    default="production_latest",
+    help="Model folder name under MODEL_OUTPUT_PATH.",
+)
+@click.option(
+    "--language",
+    type=str,
+    default="es",
+    help="Target language for output speech.",
+)
+@click.option(
+    "--speaker-ref",
+    type=str,
+    default="ref_en",
+    help="Speaker reference wav for inference.",
+)
+def main(
+    text, output_filename, output_dir, voice, model_version, language, speaker_ref
+):
+    """Run inference with a fine-tuned XTTS model."""
+    # Initialize model
+    gpu = torch.cuda.is_available()
+    model_path = MODEL_OUTPUT_PATH / voice / model_version
+    speaker_ref_path = (
+        MODEL_OUTPUT_PATH / voice / "speaker_references" / f"{speaker_ref}.wav"
     )
-    parser.add_argument("--text", type=str, required=True, help="Text to synthesize.")
-    parser.add_argument(
-        "--output_filename",
-        type=str,
-        default="xtts_output",
-        help="Output WAV file name.",
-    )
-    parser.add_argument(
-        "--output-folder",
-        type=str,
-        default=None,
-        help="Name of output folder under inference dir. Defaults to timestamp.",
-    )
-    parser.add_argument(
-        "--model", type=str, default="production_latest", help="Model folder name."
-    )
-    parser.add_argument(
-        "--language", type=str, default="es", help="Target language for output speech."
-    )
-    parser.add_argument(
-        "--speafer_ref",
-        type=str,
-        default="ref_en",
-        help="Speaker reference wav for inference.",
-    )
-    args = parser.parse_args()
 
+    tts_model = TTS(
+        model_path=model_path,
+        config_path=model_path / "config.json",
+        progress_bar=True,
+        gpu=gpu,
+    )
+
+    # Run inference
     run_inference(
-        args.text,
-        output_filename=args.output_filename,
-        output_folder=args.output_folder,
-        model_name=args.model,
-        language=args.language,
-        speafer_ref=args.speafer_ref,
+        text=text,
+        tts_model=tts_model,
+        speaker_ref_path=speaker_ref_path,
+        output_filename=output_filename,
+        output_dir=output_dir,
+        language=language,
     )
 
 
