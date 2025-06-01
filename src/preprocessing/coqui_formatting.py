@@ -6,7 +6,7 @@ from shutil import copy2
 import click
 from pydub import AudioSegment
 
-from src.constants import DATA_COQUI, DATA_PROCESSED
+from src.constants import DATA_COQUI, DATA_PRE_PROCESSED
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -37,7 +37,7 @@ def merge_coqui_csvs_and_audio(
         min_duration_ms (int): Minimum segment duration to include.
         max_duration_ms (int): Maximum segment duration to include.
     """
-    for audio_dir in DATA_PROCESSED.iterdir():
+    for audio_dir in DATA_PRE_PROCESSED.iterdir():
         name = audio_dir.name
 
         logger.info("Preparing Coqui dataset from directory: %s", audio_dir)
@@ -52,7 +52,7 @@ def merge_coqui_csvs_and_audio(
         rows_written = 0
         with open(metadata_path, "w", newline="", encoding="utf-8") as outfile:
             writer = csv.writer(outfile, delimiter="|")
-            segments_dir = DATA_PROCESSED / name / "segments"
+            segments_dir = DATA_PRE_PROCESSED / name / "segments"
             chunks_dir = segments_dir / "chunks"
 
             for csv_file in sorted(segments_dir.glob("*.csv")):

@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 from pydub import AudioSegment
 
-from src.constants import DATA_FINAL, DATA_PROCESSED, DATA_RAW
+from src.constants import DATA_FINAL, DATA_PRE_PROCESSED, DATA_RAW
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -59,7 +59,7 @@ def main(sample_rates):
             continue
 
         for sr in sample_rates:
-            output_dir = DATA_PROCESSED / name / f"{sr}hz"
+            output_dir = DATA_PRE_PROCESSED / name / f"{sr}hz"
             if output_dir.exists():
                 logger.info("Skipping %s — already processed", f"{name} - {sr}hz")
                 continue
