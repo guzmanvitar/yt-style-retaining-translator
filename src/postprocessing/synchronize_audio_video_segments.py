@@ -4,7 +4,6 @@ Applies acceleration or slowdown as needed, and saves audio-video pairs for debu
 assembly.
 """
 
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -17,7 +16,7 @@ import soundfile as sf
 from moviepy import VideoFileClip
 from pydub import AudioSegment
 
-from src.constants import DATA_FINAL, DATA_INFERENCE, DATA_RAW
+from src.constants import DATA_FINAL, DATA_INFERENCE, DATA_RAW, DATA_SYNCHED
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -66,7 +65,15 @@ def extract_video_segment(
         f"(raw={raw_duration:.3f}s → target={target_duration:.3f}s, slowdown={slowdown_factor})"
     )
 
-    clip = VideoFileClip(str(input_path)).subclipped(start_time=start, end_time=end)
+    try:
+        clip = VideoFileClip(str(input_path)).subclipped(start_time=start, end_time=end)
+    except ValueError:
+        clip = VideoFileClip(str(input_path)).subclipped(
+            start_time=start, end_time=end - 0.1
+        )
+        logger.warning(
+            f"Clipping failed fot segment {start}-{end}. Adjusting end to {end - 0.1}"
+        )
 
     if slowdown_factor:
         speed_factor = 1 / slowdown_factor
@@ -98,6 +105,36 @@ def get_video_duration(video_path: Path) -> float:
     return float(probe["format"]["duration"])
 
 
+def concat_video(output_dir: Path):
+    """Concatenate aligned video segments"""
+    name = output_dir.name
+
+    segment_list = sorted(output_dir.glob("segment_*.mp4"))
+    concat_file = output_dir / "concat_list.txt"
+    with open(concat_file, "w") as f:
+        for segment in segment_list:
+            f.write(f"file '{segment.resolve()}'\n")
+
+    concatenated_video = output_dir / f"{name}.mp4"
+    cmd_concat = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(concat_file),
+        "-c",
+        "copy",
+        str(concatenated_video),
+    ]
+    subprocess.run(cmd_concat, check=True)
+
+    # Remove temp concat file
+    concat_file.unlink()
+
+
 def align_and_export_segments(
     segment_dir: Path,
     csv_path: Path,
@@ -106,6 +143,7 @@ def align_and_export_segments(
     output_dir: Path,
     max_acceleration: float,
     buffer_silence_sec: float,
+    cleanup: bool,
 ):
     """
     Aligns translated audio segments with original video timing, applies acceleration or slowdown
@@ -115,8 +153,7 @@ def align_and_export_segments(
     - Adds silence before/after to match the original speech timing
     - Accelerates or clips audio to fit available space when required
     - Exports both the processed audio and a precisely aligned video clip
-    - Clips video segments to stay within the original video duration, logging if adjustments exceed
-        200ms
+    - Clips video segments to stay within the original video duration.
 
     Also generates a stitched audio file for the entire sequence.
 
@@ -129,6 +166,7 @@ def align_and_export_segments(
         max_acceleration (float): Maximum allowed acceleration factor for audio fitting
             (e.g., 1.2 = 20% faster).
         buffer_silence_sec (float): Silence buffer to append after each segment (in seconds).
+        cleanup (bool): Delete aligned audio and video segment files after merging.
     """
     df = pd.read_csv(csv_path)
     df["start"] = df["start"].astype(float)
@@ -248,70 +286,25 @@ def align_and_export_segments(
             " ({video_duration:.2f}s)"
         )
 
-    stitched_audio_path = output_dir / "final_audio.wav"
+    # Save stitched audio
+    stitched_audio_path = output_dir / f"{video_name}.wav"
     final_audio.export(stitched_audio_path, format="wav")
     logger.info(f"Stitched audio saved to: {stitched_audio_path}")
 
+    # Save stitched video
+    concat_video(output_dir)
 
-def concat_and_merge(output_dir: Path, cleanup: bool = True):
-    """Concatenate aligned video segments and merge with final audio."""
-    segment_list = sorted(output_dir.glob("segment_*.mp4"))
-    concat_file = output_dir / "concat_list.txt"
-    with open(concat_file, "w") as f:
-        for segment in segment_list:
-            f.write(f"file '{segment.resolve()}'\n")
-
-    concatenated_video = output_dir / "temp_video.mp4"
-    cmd_concat = [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        str(concat_file),
-        "-c",
-        "copy",
-        str(concatenated_video),
-    ]
-    subprocess.run(cmd_concat, check=True)
-
-    final_audio = output_dir / "final_audio.wav"
-    final_video = DATA_FINAL / f"{output_dir.name}.mp4"
-    cmd_merge = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(concatenated_video),
-        "-i",
-        str(final_audio),
-        "-map",
-        "0:v:0",
-        "-map",
-        "1:a:0",
-        "-c:v",
-        "copy",
-        "-c:a",
-        "aac",
-        str(final_video),
-    ]
-    subprocess.run(cmd_merge, check=True)
-    logger.info(f"Final video saved to: {final_video}")
-
+    # Remove unstitched files
     if cleanup:
-        shutil.rmtree(output_dir)
-        logger.info(f"Removed segment folder: {output_dir}")
+        for video_segment in output_dir.glob("segment_*.mp4"):
+            video_segment.unlink()
+        for audio_segment in output_dir.glob("segment_*.wav"):
+            audio_segment.unlink()
 
 
 @click.command()
 @click.option("--max-acceleration", type=float, default=1.15)
 @click.option("--buffer", "buffer_silence_sec", type=float, default=0.25)
-@click.option(
-    "--merge/--no-merge",
-    default=True,
-    help="If set, merge video segments and audio after alignment (default: True).",
-)
 @click.option(
     "--cleanup/--no-cleanup",
     default=True,
@@ -320,20 +313,25 @@ def concat_and_merge(output_dir: Path, cleanup: bool = True):
 def main(
     max_acceleration,
     buffer_silence_sec,
-    merge,
     cleanup,
 ):
     for inference_dir in DATA_INFERENCE.iterdir():
         name = inference_dir.name
-        output_path = DATA_FINAL / f"{name}.mp4"
 
-        if output_path.exists():
+        final_path = DATA_FINAL / f"{name}.mp4"
+        if final_path.exists():
+            logger.info("Skipping %s — Processed video found in %s", name, DATA_FINAL)
+            continue
+
+        output_dir = DATA_SYNCHED / name
+        output_paths = [output_dir / f"{name}.mp4", output_dir / f"{name}.wav"]
+
+        if all([p.exists() for p in output_paths]):
             logger.info("Skipping %s — already processed", name)
             continue
 
         segment_dir = inference_dir / "tts_segments"
         csv_path = inference_dir / "translated_segments.csv"
-        output_dir = DATA_FINAL / name
         video_dir = DATA_RAW / "videos"
 
         align_and_export_segments(
@@ -344,10 +342,8 @@ def main(
             output_dir=output_dir,
             max_acceleration=max_acceleration,
             buffer_silence_sec=buffer_silence_sec,
+            cleanup=cleanup,
         )
-
-        if merge:
-            concat_and_merge(output_dir, cleanup=cleanup)
 
 
 if __name__ == "__main__":
