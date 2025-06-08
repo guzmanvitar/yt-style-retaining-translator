@@ -28,6 +28,7 @@ DATA_RAW = DATA / "raw"
 DATA_PRE_PROCESSED = DATA / "pre_processed"
 DATA_INFERENCE = DATA / "inference"
 DATA_SYNCHED = DATA / "synched"
+DATA_LIP_SYNCHED = DATA / "lip_synched"
 DATA_FINAL = DATA / "final"
 
 TESTS_DIR = ROOT / "tests"
@@ -47,4 +48,5 @@ DATA_RAW.mkdir(exist_ok=True, parents=True)
 DATA_PRE_PROCESSED.mkdir(exist_ok=True, parents=True)
 DATA_INFERENCE.mkdir(exist_ok=True, parents=True)
 DATA_SYNCHED.mkdir(exist_ok=True, parents=True)
+DATA_LIP_SYNCHED.mkdir(exist_ok=True, parents=True)
 DATA_FINAL.mkdir(exist_ok=True, parents=True)
