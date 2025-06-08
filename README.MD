@@ -55,3 +55,57 @@ Install in editable mode (with no dependencies) using uv pip:
 ```bash
 uv pip install -e ~/support_repos/coqui-ai-TTS
 ```
+
+4️⃣ Install Wav2Lip (CLI Integration with Alias)
+This project uses the [Wav2Lip](https://github.com/Rudrabha/Wav2Lip) model for lip synchronization of the speaker’s face with the translated audio.
+
+Wav2Lip is not published as a Python package and its dependencies conflict with the rest of this project.
+To isolate the environment, we clone the repository outside this project and create a dedicated virtual environment.
+
+Clone the Wav2Lip repository to a folder outside your project:
+```bash
+cd ~/support_repos
+git clone https://github.com/Rudrabha/Wav2Lip.git
+cd Wav2Lip
+```
+
+Create a Virtual Environment and install updated, compatible dependencies:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install --upgrade pip
+
+# Install minimal compatible dependencies
+pip install --no-deps tqdm numba requests
+pip install "llvmlite>=0.44,<0.45"
+pip install opencv-python opencv-contrib-python
+pip install --upgrade numpy==2.2.0 librosa==0.10.0 matplotlib
+
+# Install PyTorch and related packages for GPU (adjust CUDA version if needed)
+pip install torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu118
+```
+
+Wav2Lip requires a pretrained checkpoint file, which is not included in the repo.
+
+Go to the official checkpoint folder:
+https://drive.google.com/drive/folders/1I-0dNLfFOSFwrfqjNa-SXuwaURHE5K4k
+
+Download the file named wav2lip_gan.pth
+
+Move the downloaded file to the checkpoints/ directory:
+```bash
+mkdir -p checkpoints
+mv ~/Downloads/wav2lip_gan.pth checkpoints/
+```
+
+To invoke Wav2Lip from anywhere via command line, create an alias:
+```bash
+alias wav2lip_inference='~/support_repos/Wav2Lip/.venv/bin/python ~/support_repos/Wav2Lip/inference.py'
+```
+
+Add this line to your ~/.bashrc or ~/.zshrc file to persist it across sessions:
+```bash
+echo "alias wav2lip_inference='~/support_repos/Wav2Lip/.venv/bin/python ~/support_repos/Wav2Lip/inference.py'" >> ~/.bashrc
+source ~/.bashrc
+```
