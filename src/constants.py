@@ -43,6 +43,8 @@ XTTS_PRETRAINED_DIR = (
     / "tts_models--multilingual--multi-dataset--xtts_v2"
 )
 
+SUPPORT_REPO = Path.home() / "support_repos"
+
 LOGS.mkdir(exist_ok=True, parents=True)
 DATA_RAW.mkdir(exist_ok=True, parents=True)
 DATA_PRE_PROCESSED.mkdir(exist_ok=True, parents=True)

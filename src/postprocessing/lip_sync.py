@@ -4,8 +4,8 @@ Lip sync pipeline for translated videos using Wav2Lip.
 This script checks for synchronized video/audio folders and applies lip synchronization
 using the Wav2Lip model. Already-processed videos are skipped automatically.
 
-It is designed to run on a GPU-enabled environment and assumes the Wav2Lip inference alias
-(`wav2lip_inference`) is set up and points to the correct Python entrypoint.
+It is designed to run on a GPU-enabled environment and assumes the Wav2Lip virtual environment
+is available in its repo folder.
 """
 
 import subprocess
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import click
 
-from src.constants import DATA_LIP_SYNCHED, DATA_SYNCHED
+from src.constants import DATA_LIP_SYNCHED, DATA_SYNCHED, SUPPORT_REPOS
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -28,10 +28,16 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
         audio_path (Path): Path to the translated audio with hum fillers.
         output_path (Path): Output path for the final lip-synced video.
     """
+    wav2lip_repo = SUPPORT_REPOS / "Wav2Lip"
+    wav2lip_script = wav2lip_repo / "inference.py"
+    python_bin = wav2lip_repo / ".venv" / "bin" / "python"
+    checkpoint_path = wav2lip_repo / "checkpoints" / "wav2lip_gan.pth"
+
     cmd = [
-        "wav2lip_inference",
+        str(python_bin),
+        str(wav2lip_script),
         "--checkpoint_path",
-        "checkpoints/wav2lip_gan.pth",
+        str(checkpoint_path),
         "--face",
         str(face_video),
         "--audio",
@@ -87,7 +93,7 @@ def main():
         try:
             run_wav2lip(face_video, audio_file, output_path)
         except Exception as e:
-            logger.error("Failed to process %s: %s", name, e)
+            logger.error(f"Failed to process {name}: {e}")
 
 
 if __name__ == "__main__":
