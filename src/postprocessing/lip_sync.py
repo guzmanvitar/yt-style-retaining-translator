@@ -47,7 +47,7 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
     ]
 
     logger.info(f"[WAV2LIP] Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd)
 
     if result.returncode != 0:
         logger.error(f"[WAV2LIP] Failed with return code {result.returncode}")
@@ -68,8 +68,6 @@ def main():
     and produces:
     - a lip-synced video at DATA_LIP_SYNCHED/{name}.mp4
     """
-    DATA_LIP_SYNCHED.mkdir(parents=True, exist_ok=True)
-
     for inference_dir in DATA_SYNCHED.iterdir():
         name = inference_dir.name
         output_path = DATA_LIP_SYNCHED / f"{name}.mp4"
