@@ -21,7 +21,7 @@ logger = get_logger(__file__)
 
 def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
     """
-    Run Wav2Lip inference on a video/audio pair.
+    Run Wav2Lip inference on a video/audio pair using a Conda environment.
 
     Args:
         face_video (Path): Path to the video file containing the speaker's face.
@@ -30,11 +30,16 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
     """
     wav2lip_repo = SUPPORT_REPOS / "Wav2Lip"
     wav2lip_script = wav2lip_repo / "inference.py"
-    python_bin = wav2lip_repo / ".venv" / "bin" / "python"
     checkpoint_path = wav2lip_repo / "checkpoints" / "wav2lip_gan.pth"
 
+    conda_env_name = "wav2lip-legacy"
+
     cmd = [
-        str(python_bin),
+        "conda",
+        "run",
+        "-n",
+        conda_env_name,
+        "python",
         str(wav2lip_script),
         "--checkpoint_path",
         str(checkpoint_path),
@@ -47,7 +52,7 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
     ]
 
     logger.info(f"[WAV2LIP] Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd)
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
         logger.error(f"[WAV2LIP] Failed with return code {result.returncode}")

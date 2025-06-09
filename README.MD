@@ -60,7 +60,7 @@ uv pip install -e ~/support_repos/coqui-ai-TTS
 This project uses the [Wav2Lip](https://github.com/Rudrabha/Wav2Lip) model for lip synchronization of the speaker’s face with the translated audio.
 
 Wav2Lip is not published as a Python package and its dependencies conflict with the rest of this project.
-To isolate the environment, we clone the repository outside this project and create a dedicated virtual environment.
+To isolate the environment, we clone the repository outside this project and create a dedicated conda environment.
 
 Clone the Wav2Lip repository to a folder outside your project:
 ```bash
@@ -69,19 +69,12 @@ git clone https://github.com/Rudrabha/Wav2Lip.git
 cd Wav2Lip
 ```
 
-Create a Virtual Environment and install updated, compatible dependencies:
+Create a Conda Environment and install updated, compatible dependencies:
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+conda create -n wav2lip-legacy python=3.6 -y
+conda activate wav2lip-legacy
 
-pip install --upgrade pip
-
-# Install minimal compatible dependencies
-pip install tqdm==4.45.0 requests "llvmlite>=0.44,<0.45" opencv-python opencv-contrib-python
-pip install --upgrade numpy==1.23.5 numba==0.56.4 librosa==0.10.0 matplotlib
-
-# Install PyTorch and related packages for GPU (adjust CUDA version if needed)
-pip install torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu118
+pip install -r requirements.txt
 ```
 
 Wav2Lip requires a pretrained checkpoint file, which is not included in the repo.
