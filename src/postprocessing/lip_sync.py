@@ -13,7 +13,7 @@ from pathlib import Path
 
 import click
 
-from src.constants import DATA_LIP_SYNCHED, DATA_SYNCHED, SUPPORT_REPOS
+from src.constants import DATA_FINAL, DATA_LIP_SYNCHED, DATA_SYNCHED, SUPPORT_REPOS
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -57,41 +57,81 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
         logger.info(f"[WAV2LIP] Output saved to: {output_path}")
 
 
+def concat_video(input_dir: Path, output_dir: Path, name: str):
+    """Concatenate aligned video segments"""
+    segment_list = sorted(input_dir.glob("segment_*.mp4"))
+    concat_file = input_dir / "concat_list.txt"
+    with open(concat_file, "w") as f:
+        for segment in segment_list:
+            f.write(f"file '{segment.resolve()}'\n")
+
+    concatenated_video = output_dir / f"{name}.mp4"
+    cmd_concat = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(concat_file),
+        "-c",
+        "copy",
+        str(concatenated_video),
+    ]
+    subprocess.run(cmd_concat, check=True)
+
+    # Remove temp concat file
+    concat_file.unlink()
+
+
 @click.command()
 def main():
     """
-    Iterate over processed video/audio folders and apply lip-sync using Wav2Lip.
+    Iterate over segmented video/audio folders and apply lip-sync using Wav2Lip.
 
-    Skips entries already lip-synced. This script expects:
-    - a video named {name}.mp4 in DATA_SYNCHED/{name}/
-    - a filler-enhanced audio file named {name}_lip_sync.wav
-    and produces:
-    - a lip-synced video at DATA_LIP_SYNCHED/{name}.mp4
+    For each segment in DATA_SYNCHED/{name}/segments:
+    - If a corresponding audio file exists (same stem + "_lip_sync.wav"), lip-sync it.
+    - Otherwise, skip the segment.
+
+    Output is written to:
+    - DATA_LIP_SYNCHED/{name}/segments/{segment_name}.mp4
     """
     for inference_dir in DATA_SYNCHED.iterdir():
         name = inference_dir.name
-        output_path = DATA_LIP_SYNCHED / f"{name}.mp4"
 
-        if output_path.exists():
-            logger.info("Skipping %s — lip-synced video already exists.", name)
+        final_path = DATA_FINAL / f"{name}.mp4"
+        if final_path.exists():
+            logger.info("Skipping %s — Final video found in %s", name, DATA_FINAL)
             continue
 
-        face_video = inference_dir / f"{name}.mp4"
-        audio_file = inference_dir / f"{name}_lip_sync.wav"
-
-        if not face_video.exists() or not audio_file.exists():
-            logger.warning(
-                "Missing input for %s — skipping. (Video: %s, Audio: %s)",
-                name,
-                face_video.exists(),
-                audio_file.exists(),
-            )
+        segment_dir = inference_dir / "segments"
+        if not segment_dir.exists():
+            logger.warning("No segments folder found in %s — skipping.", inference_dir)
             continue
 
-        try:
-            run_wav2lip(face_video, audio_file, output_path)
-        except Exception as e:
-            logger.error(f"Failed to process {name}: {e}")
+        output_dir = DATA_LIP_SYNCHED / name / "segments"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        for video_file in sorted(segment_dir.glob("*.mp4")):
+            stem = video_file.stem
+            audio_file = segment_dir / f"{stem}.wav"
+            output_path = output_dir / f"{stem}.mp4"
+
+            if output_path.exists():
+                logger.info("Skipping segment %s — already processed.", stem)
+                continue
+
+            if not audio_file.exists():
+                logger.info("Missing audio for segment %s — skipping.", stem)
+                continue
+
+            try:
+                run_wav2lip(video_file, audio_file, output_path)
+            except Exception as e:
+                logger.error(f"Failed to process segment {stem} in {name}: {e}")
+
+        concat_video(output_dir, DATA_LIP_SYNCHED / name, name)
 
 
 if __name__ == "__main__":
