@@ -77,10 +77,8 @@ source .venv/bin/activate
 pip install --upgrade pip
 
 # Install minimal compatible dependencies
-pip install --no-deps tqdm numba requests
-pip install "llvmlite>=0.44,<0.45"
-pip install opencv-python opencv-contrib-python
-pip install --upgrade numpy==2.2.0 librosa==0.10.0 matplotlib
+pip install tqdm==4.45.0 requests "llvmlite>=0.44,<0.45" opencv-python opencv-contrib-python
+pip install --upgrade numpy==1.23.5 numba==0.56.4 librosa==0.10.0 matplotlib
 
 # Install PyTorch and related packages for GPU (adjust CUDA version if needed)
 pip install torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu118
@@ -97,15 +95,4 @@ Move the downloaded file to the checkpoints/ directory:
 ```bash
 mkdir -p checkpoints
 mv ~/Downloads/wav2lip_gan.pth checkpoints/
-```
-
-To invoke Wav2Lip from anywhere via command line, create an alias:
-```bash
-alias wav2lip_inference='~/support_repos/Wav2Lip/.venv/bin/python ~/support_repos/Wav2Lip/inference.py'
-```
-
-Add this line to your ~/.bashrc or ~/.zshrc file to persist it across sessions:
-```bash
-echo "alias wav2lip_inference='~/support_repos/Wav2Lip/.venv/bin/python ~/support_repos/Wav2Lip/inference.py'" >> ~/.bashrc
-source ~/.bashrc
 ```
