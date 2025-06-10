@@ -13,7 +13,13 @@ from pathlib import Path
 
 import click
 
-from src.constants import DATA_FINAL, DATA_LIP_SYNCHED, DATA_SYNCHED, SUPPORT_REPOS
+from src.constants import (
+    BASH,
+    DATA_FINAL,
+    DATA_LIP_SYNCHED,
+    DATA_SYNCHED,
+    SUPPORT_REPOS,
+)
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -31,15 +37,10 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
     wav2lip_repo = SUPPORT_REPOS / "Wav2Lip"
     wav2lip_script = wav2lip_repo / "inference.py"
     checkpoint_path = wav2lip_repo / "checkpoints" / "wav2lip_gan.pth"
-
-    conda_env_name = "wav2lip-legacy"
+    python_bin = BASH / "run_in_conda.sh"
 
     cmd = [
-        "conda",
-        "run",
-        "-n",
-        conda_env_name,
-        "python",
+        str(python_bin),
         str(wav2lip_script),
         "--checkpoint_path",
         str(checkpoint_path),

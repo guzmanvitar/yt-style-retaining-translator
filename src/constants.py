@@ -44,6 +44,7 @@ XTTS_PRETRAINED_DIR = (
 )
 
 SUPPORT_REPOS = Path.home() / "support_repos"
+BASH = SRC / "bash"
 
 LOGS.mkdir(exist_ok=True, parents=True)
 DATA_RAW.mkdir(exist_ok=True, parents=True)
