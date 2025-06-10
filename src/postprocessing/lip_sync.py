@@ -37,10 +37,12 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
     wav2lip_repo = SUPPORT_REPOS / "Wav2Lip"
     wav2lip_script = wav2lip_repo / "inference.py"
     checkpoint_path = wav2lip_repo / "checkpoints" / "wav2lip_gan.pth"
-    python_bin = BASH / "run_in_conda.sh"
+    conda_entrypoint = BASH / "run_in_conda.sh"
 
     cmd = [
-        str(python_bin),
+        "bash",
+        "-i",
+        str(conda_entrypoint),
         str(wav2lip_script),
         "--checkpoint_path",
         str(checkpoint_path),
