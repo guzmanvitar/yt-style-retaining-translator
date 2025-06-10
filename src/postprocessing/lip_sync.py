@@ -8,13 +8,13 @@ It is designed to run on a GPU-enabled environment and assumes the Wav2Lip virtu
 is available in its repo folder.
 """
 
+import os
 import subprocess
 from pathlib import Path
 
 import click
 
 from src.constants import (
-    BASH,
     DATA_FINAL,
     DATA_LIP_SYNCHED,
     DATA_SYNCHED,
@@ -37,12 +37,14 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
     wav2lip_repo = SUPPORT_REPOS / "Wav2Lip"
     wav2lip_script = wav2lip_repo / "inference.py"
     checkpoint_path = wav2lip_repo / "checkpoints" / "wav2lip_gan.pth"
-    conda_entrypoint = BASH / "run_in_conda.sh"
 
     cmd = [
-        "bash",
-        "-i",
-        str(conda_entrypoint),
+        "conda",
+        "run",
+        "--no-capture-output",
+        "-n",
+        "wav2lip-legacy",
+        "python",
         str(wav2lip_script),
         "--checkpoint_path",
         str(checkpoint_path),
@@ -55,8 +57,13 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
     ]
 
     logger.info(f"[WAV2LIP] Running: {' '.join(cmd)}")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-
+    result = subprocess.run(
+        cmd,
+        cwd=wav2lip_repo,  # run from repo root
+        env=os.environ.copy(),
+        capture_output=True,
+        text=True,
+    )
     if result.returncode != 0:
         logger.error(f"[WAV2LIP] Failed with return code {result.returncode}")
         logger.error(result.stderr)
