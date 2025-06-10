@@ -27,23 +27,20 @@ logger = get_logger(__file__)
 
 def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
     """
-    Run Wav2Lip inference on a video/audio pair using the virtualenv Python.
+    Run Wav2Lip ONNX-HQ inference using the virtualenv Python.
 
     Args:
         face_video (Path): Path to the video file containing the speaker's face.
         audio_path (Path): Path to the translated audio with hum fillers.
         output_path (Path): Output path for the final lip-synced video.
     """
-    wav2lip_repo = SUPPORT_REPOS / "Wav2Lip"
-    wav2lip_script = wav2lip_repo / "inference.py"
-    checkpoint_path = wav2lip_repo / "checkpoints" / "wav2lip_gan.pth"
+    wav2lip_repo = SUPPORT_REPOS / "wav2lip-onnx-HQ"
     venv_python = wav2lip_repo / ".venv" / "bin" / "python"
+    inference_script = wav2lip_repo / "inference_onnxModel.py"
 
     cmd = [
         str(venv_python),
-        str(wav2lip_script),
-        "--checkpoint_path",
-        str(checkpoint_path),
+        str(inference_script),
         "--face",
         str(face_video),
         "--audio",
@@ -52,21 +49,23 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
         str(output_path),
     ]
 
-    logger.info(f"[WAV2LIP] Running: {' '.join(cmd)}")
-    result = subprocess.run(
-        cmd,
-        cwd=wav2lip_repo,
-        env=os.environ.copy(),
-        capture_output=True,
-        text=True,
-    )
+    logger.info(f"[WAV2LIP-ONNX] Running: {' '.join(cmd)}")
 
-    if result.returncode != 0:
-        logger.error(f"[WAV2LIP] Failed with return code {result.returncode}")
-        logger.error(result.stderr)
-        raise RuntimeError("Wav2Lip processing failed.")
-    else:
-        logger.info(f"[WAV2LIP] Output saved to: {output_path}")
+    try:
+        subprocess.run(
+            cmd,
+            cwd=wav2lip_repo,
+            env=os.environ.copy(),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        logger.info(f"[WAV2LIP-ONNX] Output saved to: {output_path}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"[WAV2LIP-ONNX] Failed with return code {e.returncode}")
+        logger.error(f"stdout:\n{e.stdout}")
+        logger.error(f"stderr:\n{e.stderr}")
+        raise RuntimeError("Wav2Lip ONNX processing failed.") from e
 
 
 def concat_video(input_dir: Path, output_dir: Path, name: str):
