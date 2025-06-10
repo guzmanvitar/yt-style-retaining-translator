@@ -34,7 +34,7 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
         audio_path (Path): Path to the translated audio with hum fillers.
         output_path (Path): Output path for the final lip-synced video.
     """
-    wav2lip_repo = SUPPORT_REPOS / "wav2lip-onnx-HQ"
+    wav2lip_repo = SUPPORT_REPOS / "wav2lip-onnx-HQ-custom"
     venv_python = wav2lip_repo / ".venv" / "bin" / "python"
     inference_script = wav2lip_repo / "inference_onnxModel.py"
 

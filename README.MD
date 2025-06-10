@@ -57,7 +57,7 @@ uv pip install -e ~/support_repos/coqui-ai-TTS
 ```
 
 4️⃣ Install Wav2Lip (CLI Integration with Alias)
-This project uses a fork of the [wav2lip-onnx-HQ](https://github.com/guzmanvitar/wav2lip-onnx-HQ) model for lip synchronization of the speaker’s face with the translated audio.
+This project uses my personal version of the [wav2lip-onnx-HQ](https://github.com/guzmanvitar/wav2lip-onnx-HQ) repo for lip synchronization of the speaker’s face with the translated audio.
 
 Wav2Lip is not published as a Python package and its dependencies conflict with the rest of this project.
 To isolate the environment, we clone the repository outside this project and create a dedicated environment.
@@ -65,7 +65,7 @@ To isolate the environment, we clone the repository outside this project and cre
 Clone the Wav2Lip repository to a folder outside your project:
 ```bash
 cd ~/support_repos
-git clone https://github.com/guzmanvitar/wav2lip-onnx-HQ.git
+git clone https://github.com/guzmanvitar/wav2lip-onnx-HQ-custom.git
 cd wav2lip-onnx-HQ
 ```
 
