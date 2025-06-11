@@ -9,6 +9,7 @@ is available in its repo folder.
 """
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -142,7 +143,11 @@ def main():
                 continue
 
             if not audio_file.exists():
-                logger.info("Missing audio for segment %s — skipping.", stem)
+                logger.info(
+                    "Missing audio for segment %s — copying video without lip sync.",
+                    stem,
+                )
+                shutil.copy(video_file, output_path)
                 continue
 
             try:
