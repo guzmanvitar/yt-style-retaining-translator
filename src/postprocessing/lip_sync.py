@@ -37,16 +37,24 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
     wav2lip_repo = SUPPORT_REPOS / "wav2lip-onnx-HQ-custom"
     venv_python = wav2lip_repo / ".venv" / "bin" / "python"
     inference_script = wav2lip_repo / "inference_onnxModel.py"
+    checkpoint_path = wav2lip_repo / "checkpoints" / "wav2lip_gan.onnx"
 
     cmd = [
         str(venv_python),
         str(inference_script),
+        "--checkpoint_path",
+        str(checkpoint_path),
         "--face",
         str(face_video),
         "--audio",
         str(audio_path),
         "--outfile",
         str(output_path),
+        "--face_mode",
+        "1",
+        "--face_mask",
+        "--enhancer",
+        "gfpgan",
     ]
 
     logger.info(f"[WAV2LIP-ONNX] Running: {' '.join(cmd)}")

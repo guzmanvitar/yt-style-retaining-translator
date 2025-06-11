@@ -66,7 +66,7 @@ Clone the Wav2Lip repository to a folder outside your project:
 ```bash
 cd ~/support_repos
 git clone https://github.com/guzmanvitar/wav2lip-onnx-HQ-custom.git
-cd wav2lip-onnx-HQ
+cd wav2lip-onnx-HQ-custom
 ```
 
 Install pyenv and python 3.11:
@@ -89,17 +89,4 @@ source .venv/bin/activate
 # Install required packages
 pip install --upgrade pip
 pip install -r requirements.txt
-```
-
-Wav2Lip requires a pretrained checkpoint file, which is not included in the repo.
-
-Go to the official checkpoint folder:
-https://drive.google.com/drive/folders/1I-0dNLfFOSFwrfqjNa-SXuwaURHE5K4k
-
-Download the file named wav2lip_gan.pth
-
-Move the downloaded file to the checkpoints/ directory:
-```bash
-mkdir -p checkpoints
-mv ~/Downloads/wav2lip_gan.pth checkpoints/
 ```
