@@ -78,30 +78,58 @@ def run_wav2lip(face_video: Path, audio_path: Path, output_path: Path):
 
 
 def concat_video(input_dir: Path, output_dir: Path, name: str):
-    """Concatenate aligned video segments"""
+    """
+    Concatenate aligned video segments using consistent encoding settings.
+
+    This avoids playback or decoding issues that occur when segments differ
+    in codec, resolution, pixel format, or audio properties.
+    """
     segment_list = sorted(input_dir.glob("segment_*.mp4"))
     concat_file = input_dir / "concat_list.txt"
+
     with open(concat_file, "w") as f:
         for segment in segment_list:
             f.write(f"file '{segment.resolve()}'\n")
 
     concatenated_video = output_dir / f"{name}.mp4"
-    cmd_concat = [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        str(concat_file),
-        "-c",
-        "copy",
-        str(concatenated_video),
-    ]
-    subprocess.run(cmd_concat, check=True)
 
-    # Remove temp concat file
+    # Use re-encoding to ensure uniform stream format
+    common_ffmpeg_flags = [
+        "-shortest",
+        "-vcodec",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-crf",
+        "23",
+        "-preset",
+        "veryfast",
+        "-acodec",
+        "aac",
+        "-ac",
+        "2",
+        "-ar",
+        "44100",
+        "-b:a",
+        "128k",
+    ]
+
+    cmd_concat = (
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_file),
+        ]
+        + common_ffmpeg_flags
+        + [str(concatenated_video)]
+    )
+
+    subprocess.run(cmd_concat, check=True)
     concat_file.unlink()
 
 
