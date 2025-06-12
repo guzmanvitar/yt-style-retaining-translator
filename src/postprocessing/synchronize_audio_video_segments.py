@@ -163,7 +163,7 @@ def align_and_export_segments(
         video_path,
         0.0,
         audio_start,
-        segments_dir / "segment_00000.mp4",
+        segments_dir / "segment_000.mp4",
     )
 
     # Iterate over segments
