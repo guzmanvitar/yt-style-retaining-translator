@@ -105,7 +105,7 @@ def main() -> None:
             bg_dir.mkdir(parents=True, exist_ok=True)
 
             audio = AudioSegment.from_wav(raw_audio)
-            chunk_length_ms = 10_000
+            chunk_length_ms = 60_000
             num_chunks = len(audio) // chunk_length_ms + 1
 
             bg_segments = []
