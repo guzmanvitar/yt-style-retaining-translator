@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = "==3.10.13"
 dependencies = [
     "demucs>=4.0.1",
+    "diffq>=0.2.4",
     "fastapi>=0.115.12",
     "ffmpeg-python>=0.2.0",
     "gcloud>=0.18.3",

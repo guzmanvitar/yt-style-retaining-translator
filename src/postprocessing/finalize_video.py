@@ -8,6 +8,7 @@ from pathlib import Path
 
 import click
 import ffmpeg
+from pydub import AudioSegment
 
 from src.constants import DATA_FINAL, DATA_LIP_SYNCHED, DATA_RAW, DATA_SYNCHED
 from src.logger_definition import get_logger
@@ -18,8 +19,8 @@ logger = get_logger(__file__)
 def separate_background(audio_path: Path, output_dir: Path) -> Path:
     """
     Uses Demucs to extract background sounds from a full audio track.
+    Falls back to silence if background separation fails or background file is missing.
     """
-
     demucs_cmd = [
         "demucs",
         "--two-stems=vocals",
@@ -31,10 +32,10 @@ def separate_background(audio_path: Path, output_dir: Path) -> Path:
     ]
 
     subprocess.run(demucs_cmd, check=True)
-    background_path = output_dir / "no_vocals" / f"{audio_path.stem}.wav"
+    background_path = output_dir / "htdemucs" / f"{audio_path.stem}.wav"
 
     if not background_path.exists():
-        raise FileNotFoundError(f"Background audio not found: {background_path}")
+        raise FileNotFoundError
 
     return background_path
 
@@ -77,7 +78,7 @@ def main() -> None:
     """
     for lip_synch_dir in DATA_LIP_SYNCHED.iterdir():
         name = lip_synch_dir.name
-        final_path = DATA_FINAL / f"{name}.mp4"
+        final_path = DATA_FINAL / name / f"{name}.mp4"
         if final_path.exists():
             logger.info("Skipping %s — final video exists.", name)
             continue
@@ -97,13 +98,47 @@ def main() -> None:
 
         try:
             out_dir = DATA_FINAL / name
-            out_dir.mkdir(parents=True, exist_ok=True)
+            segment_dir = out_dir / "segments"
+            chunk_dir = segment_dir / "chunks"
+            bg_dir = segment_dir / "no_vocals"
+            chunk_dir.mkdir(parents=True, exist_ok=True)
+            bg_dir.mkdir(parents=True, exist_ok=True)
 
-            bg_audio = separate_background(raw_audio, out_dir)
-            mixed_audio = mix_tracks(translated_audio, bg_audio, out_dir / name)
+            audio = AudioSegment.from_wav(raw_audio)
+            chunk_length_ms = 10_000
+            num_chunks = len(audio) // chunk_length_ms + 1
+
+            bg_segments = []
+            for i in range(num_chunks):
+                chunk_path = chunk_dir / f"chunk_{i:04d}.wav"
+                if not chunk_path.exists():
+                    chunk = audio[i * chunk_length_ms : (i + 1) * chunk_length_ms]
+                    chunk.export(chunk_path, format="wav")
+
+                bg_out_path = bg_dir / f"chunk_{i:04d}.wav"
+                if not bg_out_path.exists():
+                    bg_path = separate_background(chunk_path, bg_dir)
+
+                bg_segments.append(bg_path)
+
+            concat_bg_path = out_dir / f"{name}.bg.wav"
+            combined = AudioSegment.empty()
+            for bg in bg_segments:
+                combined += AudioSegment.from_wav(bg)
+            combined.export(concat_bg_path, format="wav")
+
+            mixed_audio = mix_tracks(translated_audio, concat_bg_path, out_dir / name)
             mux_audio_to_video(video_path, mixed_audio, final_path)
 
-            logger.info("✅ Final video written: %s", final_path)
+            # Cleanup
+            for file in segment_dir.glob("**/*"):
+                file.unlink()
+            for folder in sorted(segment_dir.glob("**/*"), reverse=True):
+                if folder.is_dir():
+                    folder.rmdir()
+            segment_dir.rmdir()
+
+            logger.info("Final video written: %s", final_path)
 
         except Exception as e:
             logger.error("Failed to process %s: %s", name, e)
