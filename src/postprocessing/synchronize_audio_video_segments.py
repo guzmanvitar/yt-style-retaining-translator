@@ -288,9 +288,9 @@ def main(
             continue
 
         output_dir = DATA_SYNCHED / name
-        output_paths = [output_dir / f"{name}.mp4", output_dir / f"{name}.wav"]
+        output_path = output_dir / f"{name}.wav"
 
-        if all([p.exists() for p in output_paths]):
+        if output_path.exists():
             logger.info("Skipping %s — already processed", name)
             continue
 
