@@ -3,6 +3,7 @@ Finalize lip-synced videos by replacing their audio with translated speech and o
 sounds.
 """
 
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -47,9 +48,12 @@ def mix_tracks(voice_path: Path, bg_path: Path, output_path: Path) -> Path:
     mixed_audio = output_path.with_suffix(".mixed.wav")
 
     (
-        ffmpeg.input(str(voice_path))
-        .input(str(bg_path))
-        .filter("amix", inputs=2, duration="first")
+        ffmpeg.filter(
+            [ffmpeg.input(str(voice_path)), ffmpeg.input(str(bg_path))],
+            "amix",
+            inputs=2,
+            duration="first",
+        )
         .output(str(mixed_audio))
         .overwrite_output()
         .run()
@@ -63,9 +67,14 @@ def mux_audio_to_video(video_path: Path, audio_path: Path, output_path: Path) ->
     Mux audio into video using ffmpeg, replacing original audio.
     """
     (
-        ffmpeg.input(str(video_path))
-        .input(str(audio_path))
-        .output(str(output_path), vcodec="copy", acodec="aac", strict="experimental")
+        ffmpeg.output(
+            ffmpeg.input(str(video_path)),
+            ffmpeg.input(str(audio_path)),
+            str(output_path),
+            vcodec="copy",
+            acodec="aac",
+            strict="experimental",
+        )
         .overwrite_output()
         .run()
     )
@@ -96,52 +105,43 @@ def main() -> None:
             logger.warning("Missing files for %s — skipping.", name)
             continue
 
-        try:
-            out_dir = DATA_FINAL / name
-            segment_dir = out_dir / "segments"
-            chunk_dir = segment_dir / "chunks"
-            bg_dir = segment_dir / "no_vocals"
-            chunk_dir.mkdir(parents=True, exist_ok=True)
-            bg_dir.mkdir(parents=True, exist_ok=True)
+        out_dir = DATA_FINAL / name
+        segment_dir = out_dir / "segments"
+        chunk_dir = segment_dir / "chunks"
+        bg_dir = segment_dir / "no_vocals"
+        chunk_dir.mkdir(parents=True, exist_ok=True)
+        bg_dir.mkdir(parents=True, exist_ok=True)
 
-            audio = AudioSegment.from_wav(raw_audio)
-            chunk_length_ms = 60_000
-            num_chunks = len(audio) // chunk_length_ms + 1
+        audio = AudioSegment.from_wav(raw_audio)
+        chunk_length_ms = 60_000
+        num_chunks = len(audio) // chunk_length_ms + 1
 
-            bg_segments = []
-            for i in range(num_chunks):
-                chunk_path = chunk_dir / f"chunk_{i:04d}.wav"
-                if not chunk_path.exists():
-                    chunk = audio[i * chunk_length_ms : (i + 1) * chunk_length_ms]
-                    chunk.export(chunk_path, format="wav")
+        bg_segments = []
+        for i in range(num_chunks):
+            chunk_path = chunk_dir / f"chunk_{i:04d}.wav"
+            if not chunk_path.exists():
+                chunk = audio[i * chunk_length_ms : (i + 1) * chunk_length_ms]
+                chunk.export(chunk_path, format="wav")
 
-                bg_out_path = bg_dir / f"chunk_{i:04d}.wav"
-                if not bg_out_path.exists():
-                    bg_path = separate_background(chunk_path, bg_dir)
+            bg_out_path = bg_dir / "htdemucs" / f"chunk_{i:04d}.wav"
+            if not bg_out_path.exists():
+                separate_background(chunk_path, bg_dir)
 
-                bg_segments.append(bg_path)
+            bg_segments.append(bg_out_path)
 
-            concat_bg_path = out_dir / f"{name}.bg.wav"
-            combined = AudioSegment.empty()
-            for bg in bg_segments:
-                combined += AudioSegment.from_wav(bg)
-            combined.export(concat_bg_path, format="wav")
+        concat_bg_path = out_dir / f"{name}.bg.wav"
+        combined = AudioSegment.empty()
+        for bg in bg_segments:
+            combined += AudioSegment.from_wav(bg)
+        combined.export(concat_bg_path, format="wav")
 
-            mixed_audio = mix_tracks(translated_audio, concat_bg_path, out_dir / name)
-            mux_audio_to_video(video_path, mixed_audio, final_path)
+        mixed_audio = mix_tracks(translated_audio, concat_bg_path, out_dir / name)
+        mux_audio_to_video(video_path, mixed_audio, final_path)
 
-            # Cleanup
-            for file in segment_dir.glob("**/*"):
-                file.unlink()
-            for folder in sorted(segment_dir.glob("**/*"), reverse=True):
-                if folder.is_dir():
-                    folder.rmdir()
-            segment_dir.rmdir()
-
-            logger.info("Final video written: %s", final_path)
-
-        except Exception as e:
-            logger.error("Failed to process %s: %s", name, e)
+        # Cleanup
+        shutil.rmtree(segment_dir)
+        concat_bg_path.unlink()
+        mixed_audio.unlink()
 
 
 if __name__ == "__main__":
