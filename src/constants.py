@@ -16,6 +16,7 @@ TRAINERS = TTS / "trainers"
 TRANSLATION = SRC / "translation"
 LLM_SERVICE = TRANSLATION / "llm_service"
 LLM_SERVICE_CONFIG = LLM_SERVICE / "llm-services-config.yaml"
+SPEAKERS_CONFIG = LLM_SERVICE / "speakers-config.yaml"
 
 MODEL_CONFIG_PATH = TTS / "configs"
 

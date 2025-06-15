@@ -13,8 +13,14 @@ from pathlib import Path
 
 import click
 import pandas as pd
+import yaml
 
-from src.constants import DATA_FINAL, DATA_INFERENCE, DATA_PRE_PROCESSED
+from src.constants import (
+    DATA_FINAL,
+    DATA_INFERENCE,
+    DATA_PRE_PROCESSED,
+    SPEAKERS_CONFIG,
+)
 from src.logger_definition import get_logger
 from src.translation.llm_service.services import LLMServiceFactory
 
@@ -66,7 +72,14 @@ def extract_translations(response: str) -> list[str]:
     ]
 
 
-def translate_segments(df: pd.DataFrame, batch_size: int = 50) -> pd.DataFrame:
+def translate_segments(
+    df: pd.DataFrame,
+    speaker: str,
+    speaker_config_path: Path = SPEAKERS_CONFIG,
+    batch_size: int = 50,
+    input_language: str = "english",
+    output_language: str = "spanish",
+) -> pd.DataFrame:
     """Translate a DataFrame of segments using the LLM in batches.
 
     Args:
@@ -77,6 +90,11 @@ def translate_segments(df: pd.DataFrame, batch_size: int = 50) -> pd.DataFrame:
         pd.DataFrame: Translated DataFrame.
     """
     service = LLMServiceFactory("gpt-4", "translator").get_service()
+
+    with open(speaker_config_path, encoding="utf-8") as file:
+        config = yaml.safe_load(file)
+        speaker_vocabulary = config["speakers"][speaker]["vocabulary"]
+
     translated_batches = []
     len_df = len(df)
 
@@ -86,7 +104,12 @@ def translate_segments(df: pd.DataFrame, batch_size: int = 50) -> pd.DataFrame:
 
         if not service.initial_prompt:
             raise ValueError("Missing system prompt for translation service")
-        prompt = service.initial_prompt.format(sliced_text=prompt_text)
+        prompt = service.initial_prompt.format(
+            sliced_text=prompt_text,
+            input_language=input_language,
+            output_language=output_language,
+            speaker_vocabulary=speaker_vocabulary,
+        )
 
         response = service.generate_formatted_response(prompt)
         translations = extract_translations(response)
@@ -100,7 +123,12 @@ def translate_segments(df: pd.DataFrame, batch_size: int = 50) -> pd.DataFrame:
 
 
 @click.command()
-def main():
+@click.option("--speaker", required=True, help="Name of the speaker to use.")
+@click.option("--input-language", default="english", help="Input language of segments")
+@click.option(
+    "--output-language", default="spanish", help="Target translation language"
+)
+def main(speaker: str, input_language: str, output_language: str):
     """Translate all segment CSVs and output a combined translated CSV."""
     for audio_dir in DATA_PRE_PROCESSED.iterdir():
         name = audio_dir.name
@@ -120,7 +148,12 @@ def main():
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         df = load_segment_csvs(input_dir)
-        translated_df = translate_segments(df)
+        translated_df = translate_segments(
+            df,
+            speaker=speaker,
+            input_language=input_language,
+            output_language=output_language,
+        )
         translated_df.to_csv(output_path, index=False)
 
         logger.info(f"Translated segments written to: {output_path}")

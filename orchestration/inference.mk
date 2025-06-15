@@ -22,7 +22,7 @@ segment: convert
 
 # Step 4: Translate the transcribed audio segments
 translate_transcribe: segment
-	uv run python -m src.translation.translate_transcription
+	uv run python -m src.translation.translate_transcription --speaker $(VOICE)
 
 # Step 5: Run TTS on translated transcription to generate audio
 translate_audio: translate_transcribe
