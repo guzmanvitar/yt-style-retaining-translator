@@ -19,7 +19,7 @@ services:
       Do not translate the phrases individually, but rather as a whole text.
       For output however, strictly map one translation for each phrase. Keep the order and do not add or remove any
       items.
-      Translate all non punctuation characters to full words, example: "400BC" to  "cuatrocientos antes de Cristo".
+      Translate all non punctuation symbols and abreviations to full words, example: "400BC" to "cuatrocientos antes de Cristo", "20th century" to "siglo veinte", "20%" to "veinte por ciento".
       Use the following translations for the specific terms listed:
       {speaker_vocabulary}
       Text:
