@@ -10,7 +10,7 @@ all: coqui_formatting
 
 # Step 1: Download videos and extract audio
 download:
-	uv run python -m src.downloaders.download_youtube $(URLS)
+	uv run python -m src.downloaders.download_youtube "$(URLS)"
 
 # Step 2: Convert audio to 16kHz and 22.05kHz
 convert: download
