@@ -94,7 +94,15 @@ def concat_video(input_dir: Path, output_dir: Path, name: str):
     concatenated_video = output_dir / f"{name}.mp4"
 
     # Use re-encoding to ensure uniform stream format
-    common_ffmpeg_flags = [
+    cmd_concat = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(concat_file),
         "-shortest",
         "-vcodec",
         "libx264",
@@ -112,22 +120,7 @@ def concat_video(input_dir: Path, output_dir: Path, name: str):
         "44100",
         "-b:a",
         "128k",
-    ]
-
-    cmd_concat = (
-        [
-            "ffmpeg",
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(concat_file),
-        ]
-        + common_ffmpeg_flags
-        + [str(concatenated_video)]
-    )
+    ] + [str(concatenated_video)]
 
     subprocess.run(cmd_concat, check=True)
     concat_file.unlink()
