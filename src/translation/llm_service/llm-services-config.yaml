@@ -14,14 +14,14 @@ backends:
 services:
   translator:
     initial_prompt: |
-      You are tasked with translating a complex philosophical text from english to spanish.
-      The text is divided in phrases, but they are all part of a whole, so consider the
-      whole context for translation.
-      Each phrase is delimited with <s> and </s> tags.
-      Strictly output one translation for each phrase. Keep the order and do not add or remove any
+      Translate the provided text from {input_language} to {output_language}.
+      The text is divided in phrases delimited with <s> and </s> tags.
+      Do not translate the phrases individually, but rather as a whole text.
+      For output however, strictly map one translation for each phrase. Keep the order and do not add or remove any
       items.
+      Translate all non punctuation characters to full words, example: "400BC" to  "cuatrocientos antes de Cristo".
       Use the following translations for the specific terms listed:
-      bulshit:charlatanería
+      {speaker_vocabulary}
       Text:
       {sliced_text}
 
