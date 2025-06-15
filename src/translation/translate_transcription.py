@@ -14,7 +14,7 @@ from pathlib import Path
 import click
 import pandas as pd
 
-from src.constants import DATA_FINAL, DATA_INFERENCE, DATA_PROCESSED
+from src.constants import DATA_FINAL, DATA_INFERENCE, DATA_PRE_PROCESSED
 from src.logger_definition import get_logger
 from src.translation.llm_service.services import LLMServiceFactory
 
@@ -102,7 +102,7 @@ def translate_segments(df: pd.DataFrame, batch_size: int = 50) -> pd.DataFrame:
 @click.command()
 def main():
     """Translate all segment CSVs and output a combined translated CSV."""
-    for audio_dir in DATA_PROCESSED.iterdir():
+    for audio_dir in DATA_PRE_PROCESSED.iterdir():
         name = audio_dir.name
 
         final_path = DATA_FINAL / f"{name}.mp4"

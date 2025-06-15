@@ -11,7 +11,7 @@ import torchaudio
 import whisperx
 from pydub import AudioSegment, silence
 
-from src.constants import DATA_FINAL, DATA_PROCESSED
+from src.constants import DATA_FINAL, DATA_PRE_PROCESSED
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -331,7 +331,7 @@ def main(model_size: str, language: str) -> None:
         language_code=language, device=device
     )
 
-    for audio_dir in DATA_PROCESSED.iterdir():
+    for audio_dir in DATA_PRE_PROCESSED.iterdir():
         if not audio_dir.is_dir():
             continue
 

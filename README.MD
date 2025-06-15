@@ -55,3 +55,38 @@ Install in editable mode (with no dependencies) using uv pip:
 ```bash
 uv pip install -e ~/support_repos/coqui-ai-TTS
 ```
+
+4️⃣ Install Wav2Lip (CLI Integration with Alias)
+This project uses my personal version of the [wav2lip-onnx-HQ](https://github.com/guzmanvitar/wav2lip-onnx-HQ) repo for lip synchronization of the speaker’s face with the translated audio.
+
+Wav2Lip is not published as a Python package and its dependencies conflict with the rest of this project.
+To isolate the environment, we clone the repository outside this project and create a dedicated environment.
+
+Clone the Wav2Lip repository to a folder outside your project:
+```bash
+cd ~/support_repos
+git clone https://github.com/guzmanvitar/wav2lip-onnx-HQ-custom.git
+cd wav2lip-onnx-HQ-custom
+```
+
+Install pyenv and python 3.11:
+```bash
+curl -fsSL https://pyenv.run | bash
+export PATH="$HOME/.pyenv/bin:$PATH"
+
+pyenv install 3.11.9
+pyenv local 3.11.9
+eval "$(pyenv init --path)"
+eval "$(pyenv init -)"
+```
+
+Create venv and install requirements:
+```bash
+# Create and activate virtualenv
+python -m venv .venv
+source .venv/bin/activate
+
+# Install required packages
+pip install --upgrade pip
+pip install -r requirements.txt
+```

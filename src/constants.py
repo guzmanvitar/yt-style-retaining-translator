@@ -25,8 +25,10 @@ SECRETS = ROOT / ".secrets"
 
 DATA = ROOT / "data"
 DATA_RAW = DATA / "raw"
-DATA_PROCESSED = DATA / "processed"
+DATA_PRE_PROCESSED = DATA / "pre_processed"
 DATA_INFERENCE = DATA / "inference"
+DATA_SYNCHED = DATA / "synched"
+DATA_LIP_SYNCHED = DATA / "lip_synched"
 DATA_FINAL = DATA / "final"
 
 TESTS_DIR = ROOT / "tests"
@@ -41,8 +43,13 @@ XTTS_PRETRAINED_DIR = (
     / "tts_models--multilingual--multi-dataset--xtts_v2"
 )
 
+SUPPORT_REPOS = Path.home() / "support_repos"
+BASH = SRC / "bash"
+
 LOGS.mkdir(exist_ok=True, parents=True)
 DATA_RAW.mkdir(exist_ok=True, parents=True)
-DATA_PROCESSED.mkdir(exist_ok=True, parents=True)
+DATA_PRE_PROCESSED.mkdir(exist_ok=True, parents=True)
 DATA_INFERENCE.mkdir(exist_ok=True, parents=True)
+DATA_SYNCHED.mkdir(exist_ok=True, parents=True)
+DATA_LIP_SYNCHED.mkdir(exist_ok=True, parents=True)
 DATA_FINAL.mkdir(exist_ok=True, parents=True)

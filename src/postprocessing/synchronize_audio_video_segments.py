@@ -4,8 +4,6 @@ Applies acceleration or slowdown as needed, and saves audio-video pairs for debu
 assembly.
 """
 
-import shutil
-import subprocess
 from pathlib import Path
 
 import click
@@ -16,8 +14,9 @@ import pyrubberband as pyrb
 import soundfile as sf
 from moviepy import VideoFileClip
 from pydub import AudioSegment
+from pydub.generators import Sine
 
-from src.constants import DATA_FINAL, DATA_INFERENCE, DATA_RAW
+from src.constants import DATA_FINAL, DATA_INFERENCE, DATA_RAW, DATA_SYNCHED
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -66,7 +65,15 @@ def extract_video_segment(
         f"(raw={raw_duration:.3f}s → target={target_duration:.3f}s, slowdown={slowdown_factor})"
     )
 
-    clip = VideoFileClip(str(input_path)).subclipped(start_time=start, end_time=end)
+    try:
+        clip = VideoFileClip(str(input_path)).subclipped(start_time=start, end_time=end)
+    except ValueError:
+        clip = VideoFileClip(str(input_path)).subclipped(
+            start_time=start, end_time=end - 0.1
+        )
+        logger.warning(
+            f"Clipping failed fot segment {start}-{end}. Adjusting end to {end - 0.1}"
+        )
 
     if slowdown_factor:
         speed_factor = 1 / slowdown_factor
@@ -98,6 +105,13 @@ def get_video_duration(video_path: Path) -> float:
     return float(probe["format"]["duration"])
 
 
+def make_low_hum(duration_ms: int) -> AudioSegment:
+    """Generate a low-volume hum tone (e.g. 150Hz) to fill silent gaps for lip-sync."""
+    if duration_ms <= 0:
+        return AudioSegment.silent(duration=0)
+    return Sine(150).to_audio_segment(duration=duration_ms).apply_gain(-20)
+
+
 def align_and_export_segments(
     segment_dir: Path,
     csv_path: Path,
@@ -115,10 +129,7 @@ def align_and_export_segments(
     - Adds silence before/after to match the original speech timing
     - Accelerates or clips audio to fit available space when required
     - Exports both the processed audio and a precisely aligned video clip
-    - Clips video segments to stay within the original video duration, logging if adjustments exceed
-        200ms
-
-    Also generates a stitched audio file for the entire sequence.
+    - Clips video segments to stay within the original video duration.
 
     Args:
         segment_dir (Path): Directory containing TTS audio segments (e.g., segment_0001.wav).
@@ -140,18 +151,19 @@ def align_and_export_segments(
             raise FileNotFoundError(f"Video file not found: {video_path}")
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    segments_dir = output_dir / "segments"
+    segments_dir.mkdir(exist_ok=True)
 
     # Write first silence block for audio and video
     audio_start = df.iloc[0]["start"]
     final_audio = AudioSegment.silent(duration=round(audio_start * 1000))
-    final_audio.export(output_dir / "segment_00000_pre_audio.wav", format="wav")
 
     video_duration = get_video_duration(video_path)
     extract_video_segment(
         video_path,
         0.0,
         audio_start,
-        output_dir / "segment_00000_pre_video.mp4",
+        segments_dir / "segment_000.mp4",
     )
 
     # Iterate over segments
@@ -184,6 +196,7 @@ def align_and_export_segments(
         # Start loop variables
         slowdown_factor = None
         current_segment = AudioSegment.silent(duration=0)
+        current_segment_lipsync = AudioSegment.silent(duration=0)
 
         if actual_duration <= available_slot:
             remaining_silence = available_slot - actual_duration
@@ -192,27 +205,32 @@ def align_and_export_segments(
                 + AudioSegment.silent(duration=round(required_buffer * 1000))
                 + AudioSegment.silent(duration=round(remaining_silence * 1000))
             )
-
+            current_segment_lipsync += (
+                audio
+                + make_low_hum(round(required_buffer * 1000))
+                + make_low_hum(round(remaining_silence * 1000))
+            )
         else:
             speedup_rate = actual_duration / available_slot
             if speedup_rate <= max_acceleration:
                 accelerated = accelerate_audio(y, sr, rate=speedup_rate)
-                current_segment += accelerated + AudioSegment.silent(
-                    duration=round(required_buffer * 1000)
-                )
             else:
                 accelerated = accelerate_audio(y, sr, rate=max_acceleration)
-                current_segment += accelerated + AudioSegment.silent(
-                    duration=round(required_buffer * 1000)
-                )
-                slowdown_factor = len(current_segment) / (raw_slot * 1000)
+                slowdown_factor = len(accelerated) / (available_slot * 1000)
+
+            current_segment += accelerated + AudioSegment.silent(
+                duration=round(required_buffer * 1000)
+            )
+            current_segment_lipsync += accelerated + make_low_hum(
+                round(required_buffer * 1000)
+            )
 
         # Export current segment
-        audio_out_path = output_dir / f"segment_{i:04d}_audio.wav"
-        current_segment.export(audio_out_path, format="wav")
+        audio_out_path = segments_dir / f"segment_{i:04d}.wav"
+        current_segment_lipsync.export(audio_out_path, format="wav")
 
         # Export video segment
-        video_out_path = output_dir / f"segment_{i:04d}_video.mp4"
+        video_out_path = segments_dir / f"segment_{i:04d}.mp4"
         extract_video_segment(
             video_path,
             start,
@@ -221,7 +239,7 @@ def align_and_export_segments(
             slowdown_factor,
         )
 
-        # Debug: compare extracted video vs audio segment duration
+        # Compare extracted video vs audio segment duration for debugging purposes
         y_final, sr_final = sf.read(audio_out_path)
         segment_duration = len(y_final) / sr_final
 
@@ -236,7 +254,7 @@ def align_and_export_segments(
         final_audio += current_segment
 
     if end < video_duration:
-        leftover_segment = output_dir / f"segment_{i + 1:04d}_video.mp4"
+        leftover_segment = segments_dir / f"segment_{i + 1:04d}.mp4"
         extract_video_segment(
             video_path,
             end,
@@ -245,87 +263,32 @@ def align_and_export_segments(
         )
         logger.info(
             f"Added leftover video segment from {end:.2f}s to end of video"
-            " ({video_duration:.2f}s)"
+            f" ({video_duration:.2f}s)"
         )
 
-    stitched_audio_path = output_dir / "final_audio.wav"
+    # Save full stitched audio
+    stitched_audio_path = output_dir / f"{video_name}.wav"
     final_audio.export(stitched_audio_path, format="wav")
     logger.info(f"Stitched audio saved to: {stitched_audio_path}")
-
-
-def concat_and_merge(output_dir: Path, cleanup: bool = True):
-    """Concatenate aligned video segments and merge with final audio."""
-    segment_list = sorted(output_dir.glob("segment_*.mp4"))
-    concat_file = output_dir / "concat_list.txt"
-    with open(concat_file, "w") as f:
-        for segment in segment_list:
-            f.write(f"file '{segment.resolve()}'\n")
-
-    concatenated_video = output_dir / "temp_video.mp4"
-    cmd_concat = [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        str(concat_file),
-        "-c",
-        "copy",
-        str(concatenated_video),
-    ]
-    subprocess.run(cmd_concat, check=True)
-
-    final_audio = output_dir / "final_audio.wav"
-    final_video = DATA_FINAL / f"{output_dir.name}.mp4"
-    cmd_merge = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(concatenated_video),
-        "-i",
-        str(final_audio),
-        "-map",
-        "0:v:0",
-        "-map",
-        "1:a:0",
-        "-c:v",
-        "copy",
-        "-c:a",
-        "aac",
-        str(final_video),
-    ]
-    subprocess.run(cmd_merge, check=True)
-    logger.info(f"Final video saved to: {final_video}")
-
-    if cleanup:
-        shutil.rmtree(output_dir)
-        logger.info(f"Removed segment folder: {output_dir}")
 
 
 @click.command()
 @click.option("--max-acceleration", type=float, default=1.15)
 @click.option("--buffer", "buffer_silence_sec", type=float, default=0.25)
-@click.option(
-    "--merge/--no-merge",
-    default=True,
-    help="If set, merge video segments and audio after alignment (default: True).",
-)
-@click.option(
-    "--cleanup/--no-cleanup",
-    default=True,
-    help="Delete aligned segment files after merging (default: True).",
-)
 def main(
     max_acceleration,
     buffer_silence_sec,
-    merge,
-    cleanup,
 ):
     for inference_dir in DATA_INFERENCE.iterdir():
         name = inference_dir.name
-        output_path = DATA_FINAL / f"{name}.mp4"
+
+        final_path = DATA_FINAL / f"{name}.mp4"
+        if final_path.exists():
+            logger.info("Skipping %s — Processed video found in %s", name, DATA_FINAL)
+            continue
+
+        output_dir = DATA_SYNCHED / name
+        output_path = output_dir / f"{name}.wav"
 
         if output_path.exists():
             logger.info("Skipping %s — already processed", name)
@@ -333,7 +296,6 @@ def main(
 
         segment_dir = inference_dir / "tts_segments"
         csv_path = inference_dir / "translated_segments.csv"
-        output_dir = DATA_FINAL / name
         video_dir = DATA_RAW / "videos"
 
         align_and_export_segments(
@@ -345,9 +307,6 @@ def main(
             max_acceleration=max_acceleration,
             buffer_silence_sec=buffer_silence_sec,
         )
-
-        if merge:
-            concat_and_merge(output_dir, cleanup=cleanup)
 
 
 if __name__ == "__main__":
