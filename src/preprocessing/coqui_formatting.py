@@ -14,6 +14,12 @@ logger = get_logger(__file__)
 
 @click.command()
 @click.option(
+    "--voice",
+    type=str,
+    required=True,
+    help="Dataset voice name for output.",
+)
+@click.option(
     "--min-duration-ms",
     type=int,
     default=2000,
@@ -26,6 +32,7 @@ logger = get_logger(__file__)
     help="Maximum segment duration to include in milliseconds.",
 )
 def merge_coqui_csvs_and_audio(
+    voice: str,
     min_duration_ms: int = 2000,
     max_duration_ms: int = 11000,
 ) -> None:
@@ -39,7 +46,7 @@ def merge_coqui_csvs_and_audio(
         min_duration_ms (int): Minimum segment duration to include.
         max_duration_ms (int): Maximum segment duration to include.
     """
-    output_dir = DATA_COQUI
+    output_dir = DATA_COQUI / voice
     output_wav_dir = output_dir / "wavs"
     metadata_path = output_dir / "metadata.csv"
 

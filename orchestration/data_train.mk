@@ -22,4 +22,4 @@ segment: convert
 
 # Step 4: Create the training dataset
 coqui_formatting: segment
-	uv run python -m src.preprocessing.coqui_formatting
+	uv run python -m src.preprocessing.coqui_formatting --voice "${VOICE}"
