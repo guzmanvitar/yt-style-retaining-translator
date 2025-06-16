@@ -1,16 +1,21 @@
-"""Run Coqui TTS training using the official training script."""
+""" ""Run Coqui TTS training using the official training script with voice argument support."""
 
-import argparse
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-from src.constants import TRAINERS
+import click
+
+from src.constants import MODEL_CONFIG_PATH, TRAINERS
 
 SCRIPT_PATHS = {
     "vits": TRAINERS / "train_vits.py",
     "xtts": TRAINERS / "train_xtts_v2.py",
+}
+CONFIG_PATHS = {
+    "vits": MODEL_CONFIG_PATH / "vits-config.json",
+    "xtts": MODEL_CONFIG_PATH / "xtts-config.json",
 }
 
 
@@ -22,7 +27,7 @@ def train_model(model_type: str, voice: str) -> None:
     script = SCRIPT_PATHS[model_type]
 
     process = subprocess.Popen(
-        ["python", str(script), voice],
+        ["python", str(script), voice],  # pass the voice as an argument
         env=env,
         stdout=sys.stdout,
         stderr=sys.stderr,
@@ -30,23 +35,22 @@ def train_model(model_type: str, voice: str) -> None:
     process.communicate()
 
 
-def main() -> None:
-    """Parse arguments and trigger model training."""
-    parser = argparse.ArgumentParser(description="Run training for VITS or XTTS.")
-    parser.add_argument(
-        "--model",
-        type=str,
-        choices=["vits", "xtts"],
-        default="xtts",
-        help="Model type to train: vits or xtts (default: xtts).",
-    )
-    parser.add_argument(
-        "voice",
-        type=str,
-        help="Name of the voice folder to use (required).",
-    )
-    args = parser.parse_args()
-    train_model(args.model, args.voice)
+@click.command()
+@click.option(
+    "--model",
+    type=click.Choice(["vits", "xtts"], case_sensitive=False),
+    default="xtts",
+    help="Model type to train: vits or xtts (default: xtts).",
+)
+@click.option(
+    "--voice",
+    type=str,
+    required=True,
+    help="Dataset voice name to use for training.",
+)
+def main(model: str, voice: str) -> None:
+    """Trigger training with selected model type and voice folder."""
+    train_model(model.lower(), voice)
 
 
 if __name__ == "__main__":

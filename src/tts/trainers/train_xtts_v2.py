@@ -62,7 +62,12 @@ def prepare_xtts_v2_checkpoints(output_path: Path) -> tuple[str, str, str, str]:
 
 
 @click.command()
-@click.argument("voice")
+@click.option(
+    "--voice",
+    type=str,
+    required=True,
+    help="Dataset voice name to use for training.",
+)
 def main(voice: str):
     # speaker reference to be used in training test sentences
     SPEAKER_REFERENCE = [
