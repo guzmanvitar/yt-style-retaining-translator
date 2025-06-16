@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
-from typing import Tuple
 
+import click
 from trainer import Trainer, TrainerArgs
 from TTS.config.shared_configs import BaseDatasetConfig
 from TTS.tts.datasets import load_tts_samples
@@ -13,13 +13,13 @@ from TTS.tts.layers.xtts.trainer.gpt_trainer import (
 from TTS.tts.models.xtts import XttsAudioConfig
 from TTS.utils.manage import ModelManager
 
-from src.constants import MODEL_CONFIG_PATH, MODEL_OUTPUT_PATH
+from src.constants import DATA_COQUI, MODEL_CONFIG_PATH, MODEL_OUTPUT_PATH
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
 
 
-def prepare_xtts_v2_checkpoints(output_path: Path) -> Tuple[str, str, str, str]:
+def prepare_xtts_v2_checkpoints(output_path: Path) -> tuple[str, str, str, str]:
     """Prepare required XTTS v2.0 checkpoint files for training or inference.
 
     This function ensures the DVAE model, mel statistics, XTTS model checkpoint,
@@ -61,23 +61,28 @@ def prepare_xtts_v2_checkpoints(output_path: Path) -> Tuple[str, str, str, str]:
     )
 
 
-# speaker reference to be used in training test sentences
-SPEAKER_REFERENCE = ["data/coqui/wavs/54l8_ewcOlY_chunk_000_segment_004.wav"]
+@click.command()
+@click.argument("voice")
+def main(voice: str):
+    # speaker reference to be used in training test sentences
+    SPEAKER_REFERENCE = [
+        MODEL_OUTPUT_PATH / voice / "speaker_references" / "ref_eng.wav"
+    ]
+    output_path = MODEL_OUTPUT_PATH / voice
 
-
-def main():
     # Load local config
     config_path = MODEL_CONFIG_PATH / "xttsv2-config.json"
     with open(config_path, encoding="utf-8") as f:
         xtts_config = json.load(f)
 
     # Load checkpoints
-    CHECKPOINTS_OUT_PATH = MODEL_OUTPUT_PATH / "XTTS_v2.0_original_model_files/"
+    CHECKPOINTS_OUT_PATH = output_path / "XTTS_v2.0_original_model_files/"
     dvae_checkpoint, mel_norm_file, xtts_checkpoint, tokenizer_file = (
         prepare_xtts_v2_checkpoints(CHECKPOINTS_OUT_PATH)
     )
 
     # init args and config
+    xtts_config["base_args"]["path"] = str(DATA_COQUI / voice)
     config_dataset = BaseDatasetConfig(**xtts_config["base_args"])
 
     model_args = GPTArgs(
@@ -93,7 +98,7 @@ def main():
     # training parameters config
     config = GPTTrainerConfig(
         logger_uri=None,
-        output_path=MODEL_OUTPUT_PATH,
+        output_path=output_path,
         model_args=model_args,
         audio=audio_config,
         lr_scheduler_params={
@@ -136,7 +141,7 @@ def main():
             skip_train_epoch=False,
         ),
         config,
-        output_path=MODEL_OUTPUT_PATH,
+        output_path=output_path,
         model=model,
         train_samples=train_samples,
         eval_samples=eval_samples,

@@ -2,7 +2,6 @@
     "base_args": {
         "formatter": "ljspeech",
         "dataset_name": "youtube_audio",
-        "path": "data/coqui/",
         "meta_file_train": "metadata.csv",
         "language": "en"
     },

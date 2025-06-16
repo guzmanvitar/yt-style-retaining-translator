@@ -6,28 +6,23 @@ import subprocess
 import sys
 from pathlib import Path
 
-from src.constants import MODEL_CONFIG_PATH, TRAINERS
+from src.constants import TRAINERS
 
 SCRIPT_PATHS = {
     "vits": TRAINERS / "train_vits.py",
     "xtts": TRAINERS / "train_xtts_v2.py",
 }
-CONFIG_PATHS = {
-    "vits": MODEL_CONFIG_PATH / "vits-config.json",
-    "xtts": MODEL_CONFIG_PATH / "xtts-config.json",
-}
 
 
-def train_model(model_type: str) -> None:
-    """Launch training script for the specified model type."""
+def train_model(model_type: str, voice: str) -> None:
+    """Launch training script for the specified model type and voice."""
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path(".").resolve())
 
     script = SCRIPT_PATHS[model_type]
-    config = CONFIG_PATHS[model_type]
 
     process = subprocess.Popen(
-        ["python", str(script), "--config-path", str(config)],
+        ["python", str(script), voice],
         env=env,
         stdout=sys.stdout,
         stderr=sys.stderr,
@@ -45,8 +40,13 @@ def main() -> None:
         default="xtts",
         help="Model type to train: vits or xtts (default: xtts).",
     )
+    parser.add_argument(
+        "voice",
+        type=str,
+        help="Name of the voice folder to use (required).",
+    )
     args = parser.parse_args()
-    train_model(args.model)
+    train_model(args.model, args.voice)
 
 
 if __name__ == "__main__":
