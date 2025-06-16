@@ -27,7 +27,7 @@ def train_model(model_type: str, voice: str) -> None:
     script = SCRIPT_PATHS[model_type]
 
     process = subprocess.Popen(
-        ["python", str(script), voice],  # pass the voice as an argument
+        ["python", str(script), "--voice", voice],
         env=env,
         stdout=sys.stdout,
         stderr=sys.stderr,
