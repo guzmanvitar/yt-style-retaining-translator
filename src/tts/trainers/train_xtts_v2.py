@@ -71,9 +71,9 @@ def prepare_xtts_v2_checkpoints(output_path: Path) -> tuple[str, str, str, str]:
 def main(voice: str):
     # speaker reference to be used in training test sentences
     SPEAKER_REFERENCE = [
-        MODEL_OUTPUT_PATH / voice / "speaker_references" / "ref_eng.wav"
+        str(MODEL_OUTPUT_PATH / voice / "speaker_references" / "ref_en.wav")
     ]
-    output_path = MODEL_OUTPUT_PATH / voice
+    output_path = str(MODEL_OUTPUT_PATH / voice)
 
     # Load local config
     config_path = MODEL_CONFIG_PATH / "xttsv2-config.json"
@@ -81,7 +81,7 @@ def main(voice: str):
         xtts_config = json.load(f)
 
     # Load checkpoints
-    CHECKPOINTS_OUT_PATH = output_path / "XTTS_v2.0_original_model_files/"
+    CHECKPOINTS_OUT_PATH = MODEL_OUTPUT_PATH / "XTTS_v2.0_original_model_files/"
     dvae_checkpoint, mel_norm_file, xtts_checkpoint, tokenizer_file = (
         prepare_xtts_v2_checkpoints(CHECKPOINTS_OUT_PATH)
     )
@@ -146,7 +146,7 @@ def main(voice: str):
             skip_train_epoch=False,
         ),
         config,
-        output_path=output_path,
+        output_path=str(output_path),
         model=model,
         train_samples=train_samples,
         eval_samples=eval_samples,
