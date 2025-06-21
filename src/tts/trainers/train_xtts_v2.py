@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-import click
 from trainer import Trainer, TrainerArgs
 from TTS.config.shared_configs import BaseDatasetConfig
 from TTS.tts.datasets import load_tts_samples
@@ -13,7 +12,7 @@ from TTS.tts.layers.xtts.trainer.gpt_trainer import (
 from TTS.tts.models.xtts import XttsAudioConfig
 from TTS.utils.manage import ModelManager
 
-from src.constants import DATA_COQUI, MODEL_CONFIG_PATH, MODEL_OUTPUT_PATH
+from src.constants import MODEL_CONFIG_PATH, MODEL_OUTPUT_PATH
 from src.logger_definition import get_logger
 
 logger = get_logger(__file__)
@@ -61,20 +60,14 @@ def prepare_xtts_v2_checkpoints(output_path: Path) -> tuple[str, str, str, str]:
     )
 
 
-@click.command()
-@click.option(
-    "--voice",
-    type=str,
-    required=True,
-    help="Dataset voice name to use for training.",
-)
-def main(voice: str):
-    # speaker reference to be used in training test sentences
-    SPEAKER_REFERENCE = [
-        str(MODEL_OUTPUT_PATH / voice / "speaker_references" / "ref_en.wav")
-    ]
-    output_path = str(MODEL_OUTPUT_PATH / voice)
+# speaker reference to be used in training test sentences
+SPEAKER_REFERENCE = [
+    "data/coqui/wavs/ep_1_awakening_from_the_meaning_crisis_introduction__ep_1_awakening_from_the"
+    "_meaning_crisis_introduction_chunk_000_segment_004.wav"
+]
 
+
+def main():
     # Load local config
     config_path = MODEL_CONFIG_PATH / "xttsv2-config.json"
     with open(config_path, encoding="utf-8") as f:
@@ -87,7 +80,6 @@ def main(voice: str):
     )
 
     # init args and config
-    xtts_config["base_args"]["path"] = str(DATA_COQUI / voice)
     config_dataset = BaseDatasetConfig(**xtts_config["base_args"])
 
     model_args = GPTArgs(
@@ -103,7 +95,7 @@ def main(voice: str):
     # training parameters config
     config = GPTTrainerConfig(
         logger_uri=None,
-        output_path=output_path,
+        output_path=MODEL_OUTPUT_PATH,
         model_args=model_args,
         audio=audio_config,
         lr_scheduler_params={
@@ -146,7 +138,7 @@ def main(voice: str):
             skip_train_epoch=False,
         ),
         config,
-        output_path=str(output_path),
+        output_path=MODEL_OUTPUT_PATH,
         model=model,
         train_samples=train_samples,
         eval_samples=eval_samples,
