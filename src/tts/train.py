@@ -42,7 +42,7 @@ def train_model(model_type: str) -> None:
     default="xtts",
     help="Model type to train: vits or xtts (default: xtts).",
 )
-def main(model: str, voice: str) -> None:
+def main(model: str) -> None:
     """Trigger training with selected model type and voice folder."""
     train_model(model.lower())
 
