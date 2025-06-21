@@ -2,6 +2,7 @@
     "base_args": {
         "formatter": "ljspeech",
         "dataset_name": "youtube_audio",
+        "path": "data/coqui/",
         "meta_file_train": "metadata.csv",
         "language": "en"
     },
@@ -34,13 +35,11 @@
         "num_loader_workers": 2,
         "num_eval_loader_workers": 1,
         "eval_split_max_size": 256,
-        "eval_split_size": 0.1,
-        "print_step": 90,
+        "print_step": 180,
         "plot_step": 100,
         "log_model_step": 5,
         "save_step": 180,
         "save_n_checkpoints": 1,
-        "save_all_best": false,
         "save_checkpoints": true,
         "optimizer_params": {
             "betas": [
@@ -50,7 +49,7 @@
             "eps": 1e-8,
             "weight_decay": 1e-2
         },
-        "lr": 2e-06,
+        "lr": 5e-06,
         "lr_scheduler": "MultiStepLR"
     },
     "trainer_args": {
