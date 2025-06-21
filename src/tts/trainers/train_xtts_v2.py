@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from typing import Tuple
 
 from trainer import Trainer, TrainerArgs
 from TTS.config.shared_configs import BaseDatasetConfig
@@ -19,7 +18,7 @@ from src.logger_definition import get_logger
 logger = get_logger(__file__)
 
 
-def prepare_xtts_v2_checkpoints(output_path: Path) -> Tuple[str, str, str, str]:
+def prepare_xtts_v2_checkpoints(output_path: Path) -> tuple[str, str, str, str]:
     """Prepare required XTTS v2.0 checkpoint files for training or inference.
 
     This function ensures the DVAE model, mel statistics, XTTS model checkpoint,
@@ -62,7 +61,10 @@ def prepare_xtts_v2_checkpoints(output_path: Path) -> Tuple[str, str, str, str]:
 
 
 # speaker reference to be used in training test sentences
-SPEAKER_REFERENCE = ["data/coqui/wavs/54l8_ewcOlY_chunk_000_segment_004.wav"]
+SPEAKER_REFERENCE = [
+    "data/coqui/wavs/ep_1_awakening_from_the_meaning_crisis_introduction__ep_1_awakening_from_the"
+    "_meaning_crisis_introduction_chunk_000_segment_004.wav"
+]
 
 
 def main():

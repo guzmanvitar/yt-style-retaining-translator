@@ -1,10 +1,11 @@
-"""Run Coqui TTS training using the official training script."""
+""" ""Run Coqui TTS training using the official training script with voice argument support."""
 
-import argparse
 import os
 import subprocess
 import sys
 from pathlib import Path
+
+import click
 
 from src.constants import MODEL_CONFIG_PATH, TRAINERS
 
@@ -19,15 +20,14 @@ CONFIG_PATHS = {
 
 
 def train_model(model_type: str) -> None:
-    """Launch training script for the specified model type."""
+    """Launch training script for the specified model type and voice."""
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path(".").resolve())
 
     script = SCRIPT_PATHS[model_type]
-    config = CONFIG_PATHS[model_type]
 
     process = subprocess.Popen(
-        ["python", str(script), "--config-path", str(config)],
+        ["python", str(script)],
         env=env,
         stdout=sys.stdout,
         stderr=sys.stderr,
@@ -35,18 +35,16 @@ def train_model(model_type: str) -> None:
     process.communicate()
 
 
-def main() -> None:
-    """Parse arguments and trigger model training."""
-    parser = argparse.ArgumentParser(description="Run training for VITS or XTTS.")
-    parser.add_argument(
-        "--model",
-        type=str,
-        choices=["vits", "xtts"],
-        default="xtts",
-        help="Model type to train: vits or xtts (default: xtts).",
-    )
-    args = parser.parse_args()
-    train_model(args.model)
+@click.command()
+@click.option(
+    "--model",
+    type=click.Choice(["vits", "xtts"], case_sensitive=False),
+    default="xtts",
+    help="Model type to train: vits or xtts (default: xtts).",
+)
+def main(model: str) -> None:
+    """Trigger training with selected model type and voice folder."""
+    train_model(model.lower())
 
 
 if __name__ == "__main__":

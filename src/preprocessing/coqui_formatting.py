@@ -14,76 +14,92 @@ logger = get_logger(__file__)
 
 @click.command()
 @click.option(
+    "--voice",
+    type=str,
+    required=True,
+    help="Dataset voice name for output.",
+)
+@click.option(
     "--min-duration-ms",
     type=int,
-    default=1000,
-    help="Minimum segment duration to include in miliseconds.",
+    default=2000,
+    help="Minimum segment duration to include in milliseconds.",
 )
 @click.option(
     "--max-duration-ms",
     type=int,
     default=11000,
-    help="Maximum segment duration to include in miliseconds.",
+    help="Maximum segment duration to include in milliseconds.",
 )
 def merge_coqui_csvs_and_audio(
-    min_duration_ms: int = 1000,
+    voice: str,
+    min_duration_ms: int = 2000,
     max_duration_ms: int = 11000,
 ) -> None:
     """
-    Merge multiple segmented CSV files and copy their corresponding audio files
-    into a Coqui-compatible training dataset, filtering by audio duration.
+    Merge all segmented CSVs and audio chunks into a single Coqui-compatible dataset.
+    The merged dataset will include:
+    - One `metadata.csv`
+    - One `wavs/` directory
 
     Args:
         min_duration_ms (int): Minimum segment duration to include.
         max_duration_ms (int): Maximum segment duration to include.
     """
-    for audio_dir in DATA_PRE_PROCESSED.iterdir():
-        name = audio_dir.name
+    output_dir = DATA_COQUI / voice
+    output_wav_dir = output_dir / "wavs"
+    metadata_path = output_dir / "metadata.csv"
 
-        logger.info("Preparing Coqui dataset from directory: %s", audio_dir)
-        output_wav_dir = DATA_COQUI / name / "wavs"
-        if output_wav_dir.exists():
-            logger.info("Skipping %s — already processed", name)
-            continue
+    output_wav_dir.mkdir(parents=True, exist_ok=True)
 
-        output_wav_dir.mkdir(parents=True, exist_ok=True)
-        metadata_path = DATA_COQUI / name / "metadata.csv"
+    rows_written = 0
+    with open(metadata_path, "w", newline="", encoding="utf-8") as outfile:
+        writer = csv.writer(outfile, delimiter="|")
 
-        rows_written = 0
-        with open(metadata_path, "w", newline="", encoding="utf-8") as outfile:
-            writer = csv.writer(outfile, delimiter="|")
-            segments_dir = DATA_PRE_PROCESSED / name / "segments"
+        for audio_dir in DATA_PRE_PROCESSED.iterdir():
+            if not audio_dir.is_dir():
+                continue
+
+            name = audio_dir.name
+            segments_dir = audio_dir / "segments"
             chunks_dir = segments_dir / "chunks"
 
+            if not segments_dir.exists() or not chunks_dir.exists():
+                logger.warning("Skipping %s — segments or chunks folder missing", name)
+                continue
+
+            logger.info("Processing directory: %s", audio_dir)
+
             for csv_file in sorted(segments_dir.glob("*.csv")):
-                logger.info("Processing CSV: %s", csv_file.name)
+                logger.info("Reading CSV: %s", csv_file.name)
                 with open(csv_file, newline="", encoding="utf-8") as infile:
                     reader = csv.DictReader(infile)
                     for row in reader:
-                        filename = row["filename"]
+                        original_filename = row["filename"]
                         text = row["text"].strip()
-                        source_file = chunks_dir / filename
-                        target_file = output_wav_dir / filename
+
+                        source_file = chunks_dir / original_filename
+                        new_filename = f"{name}__{original_filename}"
+                        target_file = output_wav_dir / new_filename
 
                         if not source_file.exists():
                             logger.warning("Missing file: %s", source_file)
                             continue
 
                         duration_ms = len(AudioSegment.from_file(source_file))
-                        if (
-                            duration_ms < min_duration_ms
-                            or duration_ms > max_duration_ms
-                        ):
+                        if not (min_duration_ms <= duration_ms <= max_duration_ms):
                             logger.debug(
-                                "Skipping %s (duration: %d ms)", filename, duration_ms
+                                "Skipping %s (duration: %d ms)",
+                                original_filename,
+                                duration_ms,
                             )
                             continue
 
                         copy2(source_file, target_file)
-                        writer.writerow([filename.removesuffix(".wav"), text, text])
+                        writer.writerow([new_filename.removesuffix(".wav"), text, text])
                         rows_written += 1
 
-        logger.info("Wrote %d samples to %s", rows_written, metadata_path)
+    logger.info("Finished. Wrote %d samples to %s", rows_written, metadata_path)
 
 
 if __name__ == "__main__":

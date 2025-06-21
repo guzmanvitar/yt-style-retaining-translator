@@ -6,6 +6,7 @@ saving them with sanitized, lowercase, underscore-separated titles without punct
 """
 
 import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -84,16 +85,18 @@ def download_video(url: str, output_dir: Path, title: str) -> None:
 
 
 @click.command()
-@click.argument("urls", nargs=-1, required=True)
+@click.argument("urls", nargs=1, required=True)
 @click.option(
     "--output-dir",
     type=click.Path(path_type=Path),
     default=DATA_RAW,
     help="Directory to save downloads (default: data/raw/).",
 )
-def main(urls: tuple[str], output_dir: Path) -> None:
+def main(urls: str, output_dir: Path) -> None:
     """Download YouTube video(s) and extract WAV audio."""
-    for url in urls:
+    url_list = shlex.split(urls)
+
+    for url in url_list:
         try:
             title = get_video_title(url)
 

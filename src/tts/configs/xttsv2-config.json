@@ -35,10 +35,10 @@
         "num_loader_workers": 2,
         "num_eval_loader_workers": 1,
         "eval_split_max_size": 256,
-        "print_step": 90,
+        "print_step": 180,
         "plot_step": 100,
         "log_model_step": 5,
-        "save_step": 90,
+        "save_step": 180,
         "save_n_checkpoints": 1,
         "save_checkpoints": true,
         "optimizer_params": {
