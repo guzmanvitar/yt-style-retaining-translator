@@ -19,7 +19,7 @@ CONFIG_PATHS = {
 }
 
 
-def train_model(model_type: str, voice: str) -> None:
+def train_model(model_type: str) -> None:
     """Launch training script for the specified model type and voice."""
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path(".").resolve())
@@ -27,7 +27,7 @@ def train_model(model_type: str, voice: str) -> None:
     script = SCRIPT_PATHS[model_type]
 
     process = subprocess.Popen(
-        ["python", str(script), "--voice", voice],
+        ["python", str(script)],
         env=env,
         stdout=sys.stdout,
         stderr=sys.stderr,
@@ -42,15 +42,9 @@ def train_model(model_type: str, voice: str) -> None:
     default="xtts",
     help="Model type to train: vits or xtts (default: xtts).",
 )
-@click.option(
-    "--voice",
-    type=str,
-    required=True,
-    help="Dataset voice name to use for training.",
-)
 def main(model: str, voice: str) -> None:
     """Trigger training with selected model type and voice folder."""
-    train_model(model.lower(), voice)
+    train_model(model.lower())
 
 
 if __name__ == "__main__":
